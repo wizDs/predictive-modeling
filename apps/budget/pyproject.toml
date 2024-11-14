@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "budget"
+version = "0.1.0"
+description = ""
+authors = ["wiz <wilsonzhou92@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.13"
+google-api-python-client = "^2.153.0"
+google-auth-httplib2 = "^0.2.0"
+google-auth-oauthlib = "^1.2.1"
+polars = "^1.13.1"
+pydantic = "^2.9.2"
+pandas = "^2.2.3"
+
+
+[tool.poetry.group.dev.dependencies]
+ipykernel = "^6.29.5"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
