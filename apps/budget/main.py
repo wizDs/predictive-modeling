@@ -189,8 +189,6 @@ def get_google_sheet_data(
         return None
 
 
-# https://docs.google.com/spreadsheets/d/1i1QSrzdVf--ei9XOUDk30WWwfT_ZGNg_4x5sFbFgMt0/edit?usp=sharing
-
 payments = get_google_sheet_data(SHEET_ID, "Fixed & variable costs", API_KEY)
 
 eval_date = datetime.date.today()
