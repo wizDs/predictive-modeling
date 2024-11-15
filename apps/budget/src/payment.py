@@ -1,18 +1,10 @@
 import pandas as pd
-import requests
-import datetime
-import polars as pl
-import pydantic
-from typing import Any, Literal, Optional, Sequence, assert_never
-import enum
 from dateutil import relativedelta
-import os
+import enum
+import datetime
+from typing import Any, Collection, Literal, Optional, Sequence, assert_never
 
-SHEET_ID = os.getenv("SHEET_ID")
-API_KEY = os.getenv("API_KEY")
-REQUEST_TIMEOUT = datetime.timedelta(seconds=10)
-COLUMN_START = "A"
-COLUMN_END = "I"
+import pydantic
 
 
 class PaymentType(enum.StrEnum):
@@ -109,13 +101,15 @@ def _find_next_payment_iteratively(
             gap_aprox = datetime.timedelta(days=180)
         case PaymentType.Quarterly:
             gap = relativedelta.relativedelta(months=3)
-            gap_aprox = datetime.timedelta(days=89)
+            gap_aprox = datetime.timedelta(days=90)
         case _:
             assert_never(payment_type)
 
     iter_count += 1
     time_from_today = d - today
-    print(time_from_today, today)
+
+    if time_from_today.days == 0:
+        return d + gap
     if 0 < time_from_today.days < gap_aprox.days:
         return d
 
@@ -155,65 +149,31 @@ def calculate_next_payment(
             assert_never(payment_type)
 
 
-def get_google_sheet_data(
-    spreadsheet_id: str, sheet_name: str, api_key: str
-) -> Sequence[Payment]:
-    """"""
-    # Construct the URL for the Google Sheets API
-    base_url = "https://sheets.googleapis.com/v4/spreadsheets"
-    url = (
-        f"{base_url}/{spreadsheet_id}/values/{sheet_name}!{COLUMN_START}1:{COLUMN_END}"
-    )
+def calculate_total_payments(
+    eval_date: datetime.date, payments: Sequence[Payment], monthly_periods: int = 12
+) -> Collection[float]:
 
-    try:
-        # Make a GET request to retrieve data from the Google Sheets API
-        response = requests.get(
-            url, timeout=REQUEST_TIMEOUT.seconds, params={"alt": "json", "key": api_key}
+    date_range = pd.date_range(start=eval_date, periods=monthly_periods, freq="ME")
+
+    for curr_date in date_range:
+        curr_date = curr_date.date()
+        next_monthly_payment_date = calculate_next_payment(
+            None, PaymentType.Monthly, curr_date
         )
-        response.raise_for_status()  # Raise an exception for HTTP errors
+        total_payment = 0
+        for p in payments:
+            match p.payment_type:
+                case PaymentType.Monthly:
+                    total_payment += p.price
+                case (
+                    PaymentType.Quarterly
+                    | PaymentType.Annually
+                    | PaymentType.BiAnnually
+                ):
+                    next_payment = calculate_next_payment(
+                        p.starting_point, p.payment_type, curr_date
+                    )
+                    if next_payment == next_monthly_payment_date:
+                        total_payment += p.price
 
-        # Parse the JSON response
-        data = response.json()
-        rows = data["values"]
-        _ = rows.pop(0)
-        _rows = []
-        for row in rows:
-            print(dict(zip(Payment.model_fields, row)))
-            _rows += [Payment(**dict(zip(Payment.model_fields, row)))]
-
-        return _rows
-
-    except requests.exceptions.RequestException as e:
-        # Handle any errors that occur during the request
-        print(f"An error occurred: {e}")
-        return None
-
-
-payments = get_google_sheet_data(SHEET_ID, "Fixed & variable costs", API_KEY)
-
-eval_date = datetime.date.today()
-# next_payment_date = calculate_next_payment(None, PaymentType.Monthly, today)
-date_range = pd.date_range(start=eval_date, periods=12, freq="ME")
-
-total_payments = []
-for curr_date in date_range:
-    curr_date = curr_date.date()
-    next_monthly_payment_date = calculate_next_payment(
-        None, PaymentType.Monthly, curr_date
-    )
-    next_date_for_payment = [
-        calculate_next_payment(row.starting_point, row.payment_type, curr_date)
-        for row in payments
-    ]
-    next_total_payment = sum(
-        p.price
-        for p, d in zip(payments, next_date_for_payment)
-        if d == next_monthly_payment_date
-    )
-    total_payments += [(next_monthly_payment_date, next_total_payment)]
-df = pd.DataFrame(total_payments)
-df2 = pl.DataFrame(payments).with_columns(
-    next_date_for_payment=pl.Series(next_date_for_payment)
-)
-
-print(df)
+        yield (next_monthly_payment_date, total_payment)
