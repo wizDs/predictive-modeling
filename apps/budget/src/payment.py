@@ -80,6 +80,34 @@ class Payment(pydantic.BaseModel):
         self.monthly_price = self.calculate_monthly_price(self.payment_type, self.price)
 
 
+def _get_relativedelta(payment_type: PaymentType) -> relativedelta.relativedelta:
+    match payment_type:
+        case PaymentType.Monthly:
+            return relativedelta.relativedelta(months=1)
+        case PaymentType.Annually:
+            return relativedelta.relativedelta(years=1)
+        case PaymentType.BiAnnually:
+            return relativedelta.relativedelta(months=6)
+        case PaymentType.Quarterly:
+            return relativedelta.relativedelta(months=3)
+        case _:
+            assert_never(payment_type)
+
+
+def _get_timedelta(payment_type: PaymentType) -> datetime.timedelta:
+    match payment_type:
+        case PaymentType.Monthly:
+            return datetime.timedelta(days=30)
+        case PaymentType.Annually:
+            return datetime.timedelta(days=365)
+        case PaymentType.BiAnnually:
+            return datetime.timedelta(days=180)
+        case PaymentType.Quarterly:
+            return datetime.timedelta(days=90)
+        case _:
+            assert_never(payment_type)
+
+
 def _find_next_payment_iteratively(
     d: datetime.date,
     payment_type: PaymentType,
@@ -89,21 +117,8 @@ def _find_next_payment_iteratively(
     if today is None:
         today = datetime.date.today()
 
-    match payment_type:
-        case PaymentType.Monthly:
-            gap = relativedelta.relativedelta(months=1)
-            gap_aprox = datetime.timedelta(days=30)
-        case PaymentType.Annually:
-            gap = relativedelta.relativedelta(years=1)
-            gap_aprox = datetime.timedelta(days=365)
-        case PaymentType.BiAnnually:
-            gap = relativedelta.relativedelta(months=6)
-            gap_aprox = datetime.timedelta(days=180)
-        case PaymentType.Quarterly:
-            gap = relativedelta.relativedelta(months=3)
-            gap_aprox = datetime.timedelta(days=90)
-        case _:
-            assert_never(payment_type)
+    gap = _get_relativedelta(payment_type)
+    gap_aprox = _get_timedelta(payment_type)
 
     iter_count += 1
     time_from_today = d - today

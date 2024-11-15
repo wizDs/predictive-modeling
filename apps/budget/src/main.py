@@ -4,7 +4,7 @@ import datetime
 import polars as pl
 from typing import Sequence
 import os
-import payment
+import src.payment as payment
 
 SHEET_ID = os.getenv("SHEET_ID")
 API_KEY = os.getenv("API_KEY")
