@@ -1,8 +1,8 @@
-import pandas as pd
-from dateutil import relativedelta
 import datetime
 from typing import Generator, Optional, Sequence, assert_never
 
+from dateutil import relativedelta
+import pandas as pd
 from src.schemas import PaymentType, Payment
 
 
@@ -67,7 +67,7 @@ def calculate_next_payment(
     registered_payment_date: Optional[str],
     payment_type: PaymentType,
     today: Optional[datetime.date] = None,
-) -> Optional[datetime.date]:
+) -> datetime.date:
 
     if today is None:
         today = datetime.date.today()
@@ -79,7 +79,9 @@ def calculate_next_payment(
 
         case PaymentType.BiAnnually | PaymentType.Quarterly | PaymentType.Annually:
             if not registered_payment_date:
-                return None
+                raise ValueError(
+                    "registered_payment_date must be set if payment type is not monthly"
+                )
             y = today.year
             d, m = tuple(map(int, registered_payment_date.split("/")))
             assert 0 <= d <= 31
@@ -92,16 +94,16 @@ def calculate_next_payment(
 
 def calculate_total_payments(
     eval_date: datetime.date, payments: Sequence[Payment], monthly_periods: int = 12
-) -> Generator[tuple[datetime.datetime, float]]:
+) -> Generator[tuple[datetime.date, float]]:
 
     date_range = pd.date_range(start=eval_date, periods=monthly_periods, freq="ME")
 
-    for curr_date in date_range:
-        curr_date = curr_date.date()
+    for curr_timestamp in date_range:
+        curr_date = curr_timestamp.date()
         next_monthly_payment_date = calculate_next_payment(
             None, PaymentType.Monthly, curr_date
         )
-        total_payment = 0
+        total_payment: float = 0.0
         for p in payments:
             match p.payment_type:
                 case PaymentType.Monthly:

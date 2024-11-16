@@ -47,7 +47,9 @@ def get_google_sheet_data(
     try:
         # Make a GET request to retrieve data from the Google Sheets API
         response = requests.get(
-            url, timeout=REQUEST_TIMEOUT.seconds, params={"alt": "json", "key": api_key}
+            url=url,
+            timeout=REQUEST_TIMEOUT.seconds,
+            params={"alt": "json", "key": api_key},
         )
         response.raise_for_status()  # Raise an exception for HTTP errors
 
@@ -62,14 +64,14 @@ def get_google_sheet_data(
                     schemas.Payment(**dict(zip(schemas.Payment.model_fields, row)))
                 ]
             except Exception as e:
-                raise RuntimeError(dict(zip(schemas.Payment.model_fields, row))) from e
+                _row = dict(zip(schemas.Payment.model_fields, row))
+                raise RuntimeError(_row) from e
 
         return _rows
 
     except requests.exceptions.RequestException as e:
         # Handle any errors that occur during the request
-        print(f"An error occurred: {e}")
-        return None
+        raise RuntimeError(f"An error occurred: {e}") from e
 
 
 eval_date = datetime.date.today()
