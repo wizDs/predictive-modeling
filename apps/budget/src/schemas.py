@@ -1,6 +1,9 @@
+import datetime
 import enum
-from typing import Any, Literal, Optional, assert_never
+from operator import attrgetter
+from typing import Any, Callable, Literal, NamedTuple, Optional, Sequence, assert_never
 
+import pandas as pd
 import pydantic
 
 
@@ -75,3 +78,41 @@ class Payment(pydantic.BaseModel):
     def model_post_init(self, __context):
         self.annual_price = self.calculate_annual_price(self.payment_type, self.price)
         self.monthly_price = self.calculate_monthly_price(self.payment_type, self.price)
+
+
+class Record(NamedTuple):
+    date: datetime.date
+    price: float
+
+
+class ExpectedSalaryRecords(pydantic.BaseModel):
+    records: Sequence[Record]
+
+    def monthly_salary_stream(self, periods: int) -> Sequence[float]:
+        ordered_records = sorted(self.records, key=attrgetter("date"))
+        for i in range(ordered_records):
+            if i < len(self.records):
+                date_range = pd.date_range(
+                    start=ordered_records[i].date,
+                    end=ordered_records[i + 1].date,
+                    freq="MS",
+                    inclusive="left",
+                )
+            else:
+                pd.date_range(
+                    start=ordered_records[i].price,
+                    periods=ordered_records[0].date - ordered_records[i].date,
+                    freq="MS",
+                )
+                [ordered_records[i].price] * periods
+
+        self.records
+        return self.records
+
+
+class PaymentConfig(pydantic.BaseModel):
+    saldo: float
+    monthly_salary: float | ExpectedSalaryRecords[Record]
+    additional_cost: float
+    planned_projects: Sequence[Record]
+    periods: int
