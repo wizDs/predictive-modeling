@@ -85,34 +85,34 @@ class Record(NamedTuple):
     price: float
 
 
-class ExpectedSalaryRecords(pydantic.BaseModel):
-    records: Sequence[Record]
+# class ExpectedSalaryRecords(pydantic.BaseModel):
+#     records: Sequence[Record]
 
-    def monthly_salary_stream(self, periods: int) -> Sequence[float]:
-        ordered_records = sorted(self.records, key=attrgetter("date"))
-        for i in range(ordered_records):
-            if i < len(self.records):
-                date_range = pd.date_range(
-                    start=ordered_records[i].date,
-                    end=ordered_records[i + 1].date,
-                    freq="MS",
-                    inclusive="left",
-                )
-            else:
-                pd.date_range(
-                    start=ordered_records[i].price,
-                    periods=ordered_records[0].date - ordered_records[i].date,
-                    freq="MS",
-                )
-                [ordered_records[i].price] * periods
+#     def monthly_salary_stream(self, periods: int) -> Sequence[float]:
+#         ordered_records = sorted(self.records, key=attrgetter("date"))
+#         for i in range(ordered_records):
+#             if i < len(self.records):
+#                 date_range = pd.date_range(
+#                     start=ordered_records[i].date,
+#                     end=ordered_records[i + 1].date,
+#                     freq="MS",
+#                     inclusive="left",
+#                 )
+#             else:
+#                 pd.date_range(
+#                     start=ordered_records[i].price,
+#                     periods=ordered_records[0].date - ordered_records[i].date,
+#                     freq="MS",
+#                 )
+#                 [ordered_records[i].price] * periods
 
-        self.records
-        return self.records
+#         self.records
+#         return self.records
 
 
 class PaymentConfig(pydantic.BaseModel):
     saldo: float
-    monthly_salary: float | ExpectedSalaryRecords[Record]
+    monthly_salary: float  # | ExpectedSalaryRecords[Record]
     additional_cost: float
     planned_projects: Sequence[Record]
     periods: int
