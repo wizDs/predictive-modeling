@@ -1,5 +1,6 @@
+from collections.abc import Iterator
 import datetime
-from typing import Generator, Optional, Sequence, assert_never
+from typing import NamedTuple, Optional, Sequence, assert_never
 
 from dateutil import relativedelta
 import pandas as pd
@@ -92,9 +93,14 @@ def calculate_next_payment(
             assert_never(payment_type)
 
 
+class LivingCost(NamedTuple):
+    payment_date: datetime.date
+    total_payment: float
+
+
 def calculate_total_payments(
     eval_date: datetime.date, payments: Sequence[Payment], monthly_periods: int = 12
-) -> Generator[tuple[datetime.date, float]]:
+) -> Iterator[LivingCost]:
 
     date_range = pd.date_range(start=eval_date, periods=monthly_periods, freq="ME")
 
@@ -119,4 +125,4 @@ def calculate_total_payments(
                     if next_payment == next_monthly_payment_date:
                         total_payment += p.price
 
-        yield (next_monthly_payment_date, total_payment)
+        yield LivingCost(next_monthly_payment_date, total_payment)

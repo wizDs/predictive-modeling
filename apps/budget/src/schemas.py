@@ -110,7 +110,7 @@ class Record(NamedTuple):
 #         return self.records
 
 
-class PaymentConfig(pydantic.BaseModel):
+class PaymentInterface(pydantic.BaseModel):
     saldo: float
     monthly_salary: float  # | ExpectedSalaryRecords[Record]
     additional_cost: float
