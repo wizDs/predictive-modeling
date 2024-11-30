@@ -116,3 +116,4 @@ class PaymentInterface(pydantic.BaseModel):
     additional_cost: float
     planned_projects: Sequence[Record]
     periods: int
+    rundate: Optional[datetime.date] = None

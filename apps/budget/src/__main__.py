@@ -18,7 +18,7 @@ def _make_salary_sequence(monthly_salary: float, periods: int) -> list[float]:
 
 def main(interface: schemas.PaymentInterface) -> None:
 
-    eval_date = datetime.date.today()
+    eval_date = interface.rundate or datetime.date.today()
     payments = data_loader.get_google_sheet_data(
         SHEET_ID, "Fixed & variable costs", API_KEY
     )
@@ -64,25 +64,27 @@ def main(interface: schemas.PaymentInterface) -> None:
 
 
 if __name__ == "__main__":
-
+    default_arg = """
+    {
+        "saldo": 109000,
+        "monthly_salary": 44000,
+        "additional_cost": 6000,
+        "planned_projects": [
+            ["2025-01-01", 58000],
+            ["2025-01-01", 10500]
+        ],
+        "periods": 60,
+        "rundate": "2024-12-01"
+    }
+    """
     n_args = len(sys.argv)
-    if n_args <= 2:
+    if n_args == 1:
+        arg = default_arg
+    elif n_args == 2:
         _, arg = sys.argv
 
         if not arg:
-            arg = """
-            {
-                "saldo": 71000,
-                "monthly_salary": 44000,
-                "additional_cost": 6000,
-                "planned_projects": [
-                    ["2024-12-01", 58000],
-                    ["2024-12-01", 1500],
-                    ["2025-02-01", 15000]
-                ],
-                "periods": 60
-            }
-            """
+            arg = default_arg
     else:
         raise ValueError(f"Expects only 0 or 1 arguments. Inputs are: {sys.argv}")
 
