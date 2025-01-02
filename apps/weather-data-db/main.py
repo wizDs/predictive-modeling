@@ -1,7 +1,6 @@
 import os
 import argparse
 import logging
-from datetime import datetime
 import dmi_open_data as dmi  # type: ignore[import-untyped]
 import dotenv
 
@@ -14,7 +13,20 @@ def get_apikey() -> str:
     return os.environ["APIKEY_METOPS"]
 
 
-def get_args() -> interfaces.WeatherInterface:
+def get_interface_from_args(args: argparse.Namespace) -> interfaces.WeatherInterface:
+    return interfaces.WeatherInterface(
+        start_date=args.start_date,
+        end_date=args.end_date,
+        freq=args.freq,
+        path=args.path,
+        apikey=get_apikey(),
+        station_name=args.station,
+        datatype=dmi.Parameter(args.datatype),
+        time_partition=args.time_partition,
+    )
+
+
+def get_args() -> argparse.Namespace:
 
     parser = argparse.ArgumentParser(description="run datapipeline for 1 month")
     parser.add_argument(
@@ -39,7 +51,6 @@ def get_args() -> interfaces.WeatherInterface:
         default="temp_dry",
         type=str,
         help="type of datapipeline to be run",
-        choices=["spotprice", "powersystem", "weather"],
     )
     parser.add_argument(
         "--station",
@@ -47,24 +58,38 @@ def get_args() -> interfaces.WeatherInterface:
         type=str,
         help="the station name where the observations are collected",
     )
+    parser.add_argument(
+        "--time_partition",
+        default="MONTH",
+        type=str,
+        help="persist the observations are collected with this time partition",
+    )
+    parser.add_argument(
+        "--pipeline_type",
+        default="dmi",
+        type=str,
+        help=(
+            "determine if you want to acquire data from dmi "
+            "or make some transformations to acquired dmi data"
+        ),
+        choices=["dmi", "transformation"],
+    )
 
     args = parser.parse_args()
 
-    return interfaces.WeatherInterface(
-        start_date=args.start_date,
-        end_date=args.end_date,
-        freq=args.freq,
-        path=args.path,
-        apikey=get_apikey(),
-        station_name=args.station,
-        datatype=dmi.Parameter(args.datatype),
-    )
+    return args
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    config = get_args()
+    arguments = get_args()
+    interface = get_interface_from_args(args=arguments)
     try:
-        pipelines.WeatherPipeline(config).run()
+        match arguments.pipeline_type:
+            case "dmi":
+                pipelines.WeatherPipeline(interface).run()
+            case "transformation":
+                pipelines.WeatherDailyAggregationPipeline(interface).run()
+
     except Warning as w:
         logging.warning(w)

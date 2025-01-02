@@ -1,4 +1,6 @@
-from enum import Enum
+import enum
 
-class StationName(Enum):
-    Cph = "Københavns Lufthavn"
+
+class StationName(enum.StrEnum):
+    COPENHAGEN = "Københavns Lufthavn"
+    ROSKILDE = "Roskilde Lufthavn"

@@ -23,6 +23,7 @@ class WeatherInterface(pydantic.BaseModel):
     apikey: str
     station_name: str
     datatype: dmi.Parameter
+    time_partition: TimeDelta = TimeDelta.MONTH
 
     @property
     def date_range(self) -> list[datetime.date]:
@@ -31,6 +32,6 @@ class WeatherInterface(pydantic.BaseModel):
         ).tolist()
         _all_date_range = [d.to_pydatetime() for d in _date_range] + [
             self.start_date,
-            self.end_date,
+            self.end_date + datetime.timedelta(days=1),
         ]
         return sorted(set(_all_date_range))
