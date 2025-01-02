@@ -1,0 +1,31 @@
+[tool.poetry]
+name = "weather"
+version = "0.1.0"
+description = ""
+authors = ["wiz <wilsonzhou92@gmail.com>"]
+readme = "README.md"
+packages= [{ include = "src" }]
+
+[tool.poetry.dependencies]
+python = "^3.13"
+pytest = "^8.3.3"
+pyarrow = "^18.0.0"
+pandas = "^2.2.3"
+pydantic = "^2.9.2"
+polars = "^1.13.1"
+google-auth-oauthlib = "^1.2.1"
+google-auth-httplib2 = "^0.2.0"
+google-api-python-client = "^2.153.0"
+mypy = "^1.13.0"
+dmi-open-data = "^0.1.2"
+sqlmodel = "^0.0.22"
+pandas-stubs = "^2.2.3.241126"
+types-python-dateutil = "^2.9.0.20241206"
+pyodbc = "^5.2.0"
+python-dotenv = "^1.0.1"
+more-itertools = "^10.5.0"
+tqdm = "^4.67.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
