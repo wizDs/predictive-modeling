@@ -15,7 +15,7 @@ from src.loaders.dmi_client_wrapper import DMIClientWrapper
 
 from src import interfaces  # type: ignore[import-untyped]
 
-DELTA_RETENTION_HOURS = 1
+DELTA_RETENTION_HOURS = 8
 
 
 def delta_spark_session_builder() -> pyspark.sql.SparkSession:
@@ -125,14 +125,9 @@ class WeatherPipeline(DataPipeline):
         iteration_count = len(date_range) - 1
         for idx, curr_date in tqdm.tqdm(enumerate(date_range), total=iteration_count):
             if idx != 0:
-                try:
-                    yield self._extract_simple(
-                        client=client, start=prev_date, end=curr_date
-                    )
-                except Exception as e:
-                    raise ValueError(
-                        f"A problem occured in {prev_date.date()}-{curr_date.date()}"
-                    ) from e
+                yield self._extract_simple(
+                    client=client, start=prev_date, end=curr_date
+                )
             prev_date = curr_date
 
     def persist_to_delta(

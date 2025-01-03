@@ -15,31 +15,34 @@ class DMIClientWrapper:
     ) -> list[SimpleRecord]:
 
         # Identify station from station_name
-        try:
-            station = next(
-                station
-                for station in self.stations
-                if station.properties.name == station_name
-            )
-        except StopIteration as exc:
-            raise ValueError(f"The station '{station_name}' is not valid") from exc
+        candidate_stations = [
+            station.properties.stationId
+            for station in self.stations
+            if station.properties.name == station_name
+        ]
 
-        if parameter.value not in set(station.properties.parameterId):
-            return []
+        if not candidate_stations:
+            raise ValueError(f"The station '{station_name}' is not valid")
 
         # Get temperature observations from DMI station in given time period
-        observations = self.client.get_observations(
-            parameter=parameter,
-            station_id=station.properties.stationId,
-            limit=10_000,
-            **kwargs,
-        )
-        records = map(Record.model_validate, observations)
+        for station_id in set(candidate_stations):
 
-        # Select only SimpleRecord
-        simplerecords = map(operator.attrgetter("simple"), records)
+            observations = self.client.get_observations(
+                parameter=parameter,
+                station_id=station_id,
+                limit=10_000,
+                **kwargs,
+            )
+            if observations:
+                records = map(Record.model_validate, observations)
 
-        return list(simplerecords)
+                # Select only SimpleRecord
+                simplerecords = map(operator.attrgetter("simple"), records)
+
+                return list(simplerecords)
+
+        # if entering this loop - then no station_ids can be matched with parameter
+        raise ValueError("station_ids can be matched with parameter")
 
     def get_stations(self) -> list[WeatherStation]:
         stations = map(WeatherStation.model_validate, self.client.get_stations())
