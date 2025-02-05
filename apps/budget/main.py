@@ -1,7 +1,7 @@
 import datetime
 import sys
-import polars as pl
 import os
+import polars as pl
 from src import payment
 from src import schemas
 from src import data_loader
