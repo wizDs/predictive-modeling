@@ -7,34 +7,6 @@ import pandas as pd
 from src.schemas import PaymentType, Payment
 
 
-def _get_relativedelta(payment_type: PaymentType) -> relativedelta.relativedelta:
-    match payment_type:
-        case PaymentType.MONTHLY:
-            return relativedelta.relativedelta(months=1)
-        case PaymentType.ANNUALLY:
-            return relativedelta.relativedelta(years=1)
-        case PaymentType.BIANNUALLY:
-            return relativedelta.relativedelta(months=6)
-        case PaymentType.QUARTERLY:
-            return relativedelta.relativedelta(months=3)
-        case _:
-            assert_never(payment_type)
-
-
-def _get_timedelta(payment_type: PaymentType) -> datetime.timedelta:
-    match payment_type:
-        case PaymentType.MONTHLY:
-            return datetime.timedelta(days=30)
-        case PaymentType.ANNUALLY:
-            return datetime.timedelta(days=365)
-        case PaymentType.BIANNUALLY:
-            return datetime.timedelta(days=180)
-        case PaymentType.QUARTERLY:
-            return datetime.timedelta(days=90)
-        case _:
-            assert_never(payment_type)
-
-
 def find_next_payment_iteratively(
     d: datetime.date,
     payment_type: PaymentType,
