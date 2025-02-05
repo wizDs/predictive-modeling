@@ -59,19 +59,9 @@ class Payment(pydantic.BaseModel):
     monthly_price: Optional[pydantic.NonNegativeFloat] = None
     starting_point: Optional[str] = None
 
-    @pydantic.field_validator("price", mode="before")
+    @pydantic.field_validator("price", "annual_price", "monthly_price", mode="before")
     @classmethod
     def transform_price(cls, x: Optional[str | float]) -> Optional[str | float]:
-        return cls._replace_comma(x)
-
-    @pydantic.field_validator("annual_price", mode="before")
-    @classmethod
-    def transform_annual_price(cls, x: Optional[str]) -> Optional[str]:
-        return cls._replace_comma(x)
-
-    @pydantic.field_validator("monthly_price", mode="before")
-    @classmethod
-    def transform_monthly_price(cls, x: Optional[str]) -> Optional[str]:
         return cls._replace_comma(x)
 
     @staticmethod
@@ -81,17 +71,21 @@ class Payment(pydantic.BaseModel):
                 x = x.replace(",", ".")
         return x
 
-    @staticmethod
-    def calculate_annual_price(payment_type: PaymentType, price: float) -> float:
-        return price * payment_type.months
+    @pydantic.model_validator(mode="after")
+    def transform_starting_point(self: "Payment") -> "Payment":
+        if self.payment_type != PaymentType.MONTHLY:
+            if not self.starting_point:
+                raise ValueError(
+                    "registered_payment_date must be set if payment type is not monthly"
+                )
+            d, m = tuple(map(int, self.starting_point.split("/")))
+            assert 0 <= d <= 31
+            assert 0 <= m <= 12
+        return self
 
-    @staticmethod
-    def calculate_monthly_price(payment_type: PaymentType, price: float) -> float:
-        return price / payment_type.months
-
-    def model_post_init(self, __context):
-        self.annual_price = self.calculate_annual_price(self.payment_type, self.price)
-        self.monthly_price = self.calculate_monthly_price(self.payment_type, self.price)
+    def model_post_init(self: "Payment", _) -> None:
+        self.annual_price = self.price * self.payment_type.months
+        self.monthly_price = self.price / self.payment_type.months
 
 
 class Record(NamedTuple):

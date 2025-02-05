@@ -1,6 +1,5 @@
-from collections.abc import Iterator
 import datetime
-from typing import NamedTuple, Optional, Sequence, assert_never
+from typing import NamedTuple, Optional, Sequence, assert_never, Iterator
 
 from dateutil import relativedelta
 import pandas as pd
