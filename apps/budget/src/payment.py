@@ -9,13 +9,13 @@ from src.schemas import PaymentType, Payment
 
 def _get_relativedelta(payment_type: PaymentType) -> relativedelta.relativedelta:
     match payment_type:
-        case PaymentType.Monthly:
+        case PaymentType.MONTHLY:
             return relativedelta.relativedelta(months=1)
-        case PaymentType.Annually:
+        case PaymentType.ANNUALLY:
             return relativedelta.relativedelta(years=1)
-        case PaymentType.BiAnnually:
+        case PaymentType.BIANNUALLY:
             return relativedelta.relativedelta(months=6)
-        case PaymentType.Quarterly:
+        case PaymentType.QUARTERLY:
             return relativedelta.relativedelta(months=3)
         case _:
             assert_never(payment_type)
@@ -23,19 +23,19 @@ def _get_relativedelta(payment_type: PaymentType) -> relativedelta.relativedelta
 
 def _get_timedelta(payment_type: PaymentType) -> datetime.timedelta:
     match payment_type:
-        case PaymentType.Monthly:
+        case PaymentType.MONTHLY:
             return datetime.timedelta(days=30)
-        case PaymentType.Annually:
+        case PaymentType.ANNUALLY:
             return datetime.timedelta(days=365)
-        case PaymentType.BiAnnually:
+        case PaymentType.BIANNUALLY:
             return datetime.timedelta(days=180)
-        case PaymentType.Quarterly:
+        case PaymentType.QUARTERLY:
             return datetime.timedelta(days=90)
         case _:
             assert_never(payment_type)
 
 
-def _find_next_payment_iteratively(
+def find_next_payment_iteratively(
     d: datetime.date,
     payment_type: PaymentType,
     today: Optional[datetime.date] = None,
@@ -59,9 +59,9 @@ def _find_next_payment_iteratively(
         raise RuntimeError("did not converge")
 
     if time_from_today.days >= gap_aprox.days:
-        return _find_next_payment_iteratively(d - gap, payment_type, today, iter_count)
+        return find_next_payment_iteratively(d - gap, payment_type, today, iter_count)
     else:
-        return _find_next_payment_iteratively(d + gap, payment_type, today, iter_count)
+        return find_next_payment_iteratively(d + gap, payment_type, today, iter_count)
 
 
 def calculate_next_payment(
@@ -74,11 +74,11 @@ def calculate_next_payment(
         today = datetime.date.today()
 
     match payment_type:
-        case PaymentType.Monthly:
+        case PaymentType.MONTHLY:
             next_payment = today + relativedelta.relativedelta(months=1)
             return datetime.date(next_payment.year, next_payment.month, 1)
 
-        case PaymentType.BiAnnually | PaymentType.Quarterly | PaymentType.Annually:
+        case PaymentType.BIANNUALLY | PaymentType.QUARTERLY | PaymentType.ANNUALLY:
             if not registered_payment_date:
                 raise ValueError(
                     "registered_payment_date must be set if payment type is not monthly"
@@ -88,7 +88,7 @@ def calculate_next_payment(
             assert 0 <= d <= 31
             assert 0 <= m <= 12
             candidate_date = datetime.date(y, m, d)
-            return _find_next_payment_iteratively(candidate_date, payment_type, today)
+            return find_next_payment_iteratively(candidate_date, payment_type, today)
         case _:
             assert_never(payment_type)
 
@@ -107,17 +107,17 @@ def calculate_total_payments(
     for curr_timestamp in date_range:
         curr_date = curr_timestamp.date()
         next_monthly_payment_date = calculate_next_payment(
-            None, PaymentType.Monthly, curr_date
+            None, PaymentType.MONTHLY, curr_date
         )
         total_payment: float = 0.0
         for p in payments:
             match p.payment_type:
-                case PaymentType.Monthly:
+                case PaymentType.MONTHLY:
                     total_payment += p.price
                 case (
-                    PaymentType.Quarterly
-                    | PaymentType.Annually
-                    | PaymentType.BiAnnually
+                    PaymentType.QUARTERLY
+                    | PaymentType.ANNUALLY
+                    | PaymentType.BIANNUALLY
                 ):
                     next_payment = calculate_next_payment(
                         p.starting_point, p.payment_type, curr_date

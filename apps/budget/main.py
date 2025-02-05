@@ -22,6 +22,8 @@ def main(payment_interface: schemas.PaymentInterface) -> None:
     payments = data_loader.get_google_sheet_data(
         SHEET_ID, "Fixed & variable costs", API_KEY
     )
+    with pl.Config(tbl_cols=-1, tbl_rows=-1):
+        print(pl.DataFrame(payments))
     total_payments_df = pl.DataFrame(
         payment.calculate_total_payments(
             eval_date=eval_date,

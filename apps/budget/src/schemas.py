@@ -1,17 +1,33 @@
 import datetime
 import enum
-from operator import attrgetter
-from typing import Any, Callable, Literal, NamedTuple, Optional, Sequence, assert_never
-
-import pandas as pd
+from typing import Any, Literal, NamedTuple, Optional, Sequence, assert_never
 import pydantic
+from dateutil import relativedelta
 
 
 class PaymentType(enum.StrEnum):
-    Monthly = "Måned"
-    Annually = "År"
-    Quarterly = "Kvartal"
-    BiAnnually = "Halvårligt"
+    MONTHLY = "Måned"
+    ANNUALLY = "År"
+    QUARTERLY = "Kvartal"
+    BIANNUALLY = "Halvårligt"
+
+    @property
+    def months(self) -> int:
+        match self:
+            case self.MONTHLY:
+                return 1
+            case self.ANNUALLY:
+                return 12
+            case self.QUARTERLY:
+                return 3
+            case self.BIANNUALLY:
+                return 6
+            case _:
+                assert_never(self)
+
+    @property
+    def relativedelta(self) -> relativedelta.relativedelta:
+        return relativedelta.relativedelta(months=self.months)
 
 
 class Payment(pydantic.BaseModel):
@@ -49,31 +65,11 @@ class Payment(pydantic.BaseModel):
 
     @staticmethod
     def calculate_annual_price(payment_type: PaymentType, price: float) -> float:
-        match payment_type:
-            case PaymentType.Monthly:
-                return price * 12
-            case PaymentType.Annually:
-                return price
-            case PaymentType.BiAnnually:
-                return price * 2
-            case PaymentType.Quarterly:
-                return price * 4
-            case _:
-                assert_never(payment_type)
+        return price * payment_type.months
 
     @staticmethod
     def calculate_monthly_price(payment_type: PaymentType, price: float) -> float:
-        match payment_type:
-            case PaymentType.Monthly:
-                return price
-            case PaymentType.Annually:
-                return price / 12
-            case PaymentType.BiAnnually:
-                return price / 6
-            case PaymentType.Quarterly:
-                return price / 3
-            case _:
-                assert_never(payment_type)
+        return price / payment_type.months
 
     def model_post_init(self, __context):
         self.annual_price = self.calculate_annual_price(self.payment_type, self.price)
