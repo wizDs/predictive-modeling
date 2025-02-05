@@ -66,15 +66,16 @@ def main(interface: schemas.PaymentInterface) -> None:
 if __name__ == "__main__":
     default_arg = """
     {
-        "saldo": 109000,
+        "saldo": 47342,
         "monthly_salary": 44000,
         "additional_cost": 6000,
         "planned_projects": [
-            ["2025-01-01", 58000],
-            ["2025-01-01", 10500]
+            ["2025-04-01", 20000],
+            ["2025-03-01", 20500],
+            ["2025-03-01", 10500]
         ],
-        "periods": 60,
-        "rundate": "2024-12-01"
+        "periods": 24,
+        "rundate": "2025-02-01"
     }
     """
     n_args = len(sys.argv)
