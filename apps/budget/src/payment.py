@@ -44,8 +44,8 @@ def find_next_payment_iteratively(
     if today is None:
         today = datetime.date.today()
 
-    gap = _get_relativedelta(payment_type)
-    gap_aprox = _get_timedelta(payment_type)
+    gap = payment_type.relativedelta
+    gap_aprox = payment_type.timedelta
 
     iter_count += 1
     time_from_today = d - today
@@ -60,8 +60,8 @@ def find_next_payment_iteratively(
 
     if time_from_today.days >= gap_aprox.days:
         return find_next_payment_iteratively(d - gap, payment_type, today, iter_count)
-    else:
-        return find_next_payment_iteratively(d + gap, payment_type, today, iter_count)
+
+    return find_next_payment_iteratively(d + gap, payment_type, today, iter_count)
 
 
 def calculate_next_payment(

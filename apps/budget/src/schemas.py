@@ -26,8 +26,26 @@ class PaymentType(enum.StrEnum):
                 assert_never(self)
 
     @property
+    def days(self) -> int:
+        match self:
+            case PaymentType.MONTHLY:
+                return 30
+            case PaymentType.ANNUALLY:
+                return 365
+            case PaymentType.BIANNUALLY:
+                return 180
+            case PaymentType.QUARTERLY:
+                return 90
+            case _:
+                assert_never(self)
+
+    @property
     def relativedelta(self) -> relativedelta.relativedelta:
         return relativedelta.relativedelta(months=self.months)
+
+    @property
+    def timedelta(self) -> datetime.timedelta:
+        return datetime.timedelta(days=self.days)
 
 
 class Payment(pydantic.BaseModel):
