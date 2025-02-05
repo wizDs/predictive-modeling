@@ -16,9 +16,9 @@ def _make_salary_sequence(monthly_salary: float, periods: int) -> list[float]:
             return [monthly_salary] * periods
 
 
-def main(interface: schemas.PaymentInterface) -> None:
+def main(payment_interface: schemas.PaymentInterface) -> None:
 
-    eval_date = interface.rundate or datetime.date.today()
+    eval_date = payment_interface.rundate or datetime.date.today()
     payments = data_loader.get_google_sheet_data(
         SHEET_ID, "Fixed & variable costs", API_KEY
     )
@@ -26,13 +26,13 @@ def main(interface: schemas.PaymentInterface) -> None:
         payment.calculate_total_payments(
             eval_date=eval_date,
             payments=payments,
-            monthly_periods=interface.periods,
+            monthly_periods=payment_interface.periods,
         ),
         schema=pl.Schema({"date": pl.Date, "living_cost": pl.Float32}),
     )
     projects_df = (
         pl.DataFrame(
-            iter(interface.planned_projects),
+            iter(payment_interface.planned_projects),
             schema=pl.Schema({"date": pl.Date, "project_cost": pl.Int64}),
         )
         .group_by("date")
@@ -44,11 +44,15 @@ def main(interface: schemas.PaymentInterface) -> None:
         .with_columns(project_cost=pl.col("project_cost").fill_null(0))
         .with_columns(
             salary=pl.Series(
-                _make_salary_sequence(interface.monthly_salary, interface.periods)
+                _make_salary_sequence(
+                    payment_interface.monthly_salary, payment_interface.periods
+                )
             )
         )
         .with_columns(
-            additional_cost=pl.Series([interface.additional_cost] * interface.periods)
+            additional_cost=pl.Series(
+                [payment_interface.additional_cost] * payment_interface.periods
+            )
         )
         .with_columns(
             delta=(
@@ -58,13 +62,13 @@ def main(interface: schemas.PaymentInterface) -> None:
                 - pl.col("additional_cost")
             )
         )
-        .with_columns(saldo=interface.saldo + pl.col("delta").cum_sum())
+        .with_columns(saldo=payment_interface.saldo + pl.col("delta").cum_sum())
     )
     print(df.to_pandas())
 
 
 if __name__ == "__main__":
-    default_arg = """
+    DEFAULT_ARG = """
     {
         "saldo": 47342,
         "monthly_salary": 44000,
@@ -80,14 +84,14 @@ if __name__ == "__main__":
     """
     n_args = len(sys.argv)
     if n_args == 1:
-        arg = default_arg
+        ARG = DEFAULT_ARG
     elif n_args == 2:
-        _, arg = sys.argv
+        _, ARG = sys.argv
 
-        if not arg:
-            arg = default_arg
+        if not ARG:
+            ARG = DEFAULT_ARG
     else:
         raise ValueError(f"Expects only 0 or 1 arguments. Inputs are: {sys.argv}")
 
-    interface = schemas.PaymentInterface.model_validate_json(arg)
+    interface = schemas.PaymentInterface.model_validate_json(ARG)
     main(interface)
