@@ -62,13 +62,20 @@ class Payment(pydantic.BaseModel):
     @pydantic.field_validator("price", "annual_price", "monthly_price", mode="before")
     @classmethod
     def transform_price(cls, x: Optional[str | float]) -> Optional[str | float]:
-        return cls._replace_comma(x)
+        match x:
+            case None:
+                return None
+            case float():
+                return x
+            case str():
+                return cls._replace_comma(x)
+            case _:
+                assert_never(x)
 
     @staticmethod
-    def _replace_comma(x: Any) -> Any:
-        if isinstance(x, str):
-            if "," in x:
-                x = x.replace(",", ".")
+    def _replace_comma(x: str) -> str:
+        if "," in x:
+            x = x.replace(",", ".")
         return x
 
     @pydantic.model_validator(mode="after")
