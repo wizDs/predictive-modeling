@@ -3,7 +3,7 @@ from typing import NamedTuple, Optional, Sequence, assert_never, Iterator
 
 from dateutil import relativedelta
 import pandas as pd
-from wiz.budget.payment import PaymentType, Payment
+from wiz.budget.schemas import PaymentType, Payment
 
 
 def find_next_payment_iteratively(

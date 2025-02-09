@@ -95,8 +95,9 @@ class Payment(pydantic.BaseModel):
         self.monthly_price = self.price / self.payment_type.months
 
 
-class Record(NamedTuple):
-    date: datetime.date
+class Record(pydantic.BaseModel):
+    description: Optional[str] = None
+    due_date: datetime.date
     price: float
 
 

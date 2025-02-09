@@ -1,15 +1,35 @@
-import streamlit as st
-import pydantic
+import os
 import datetime
-from typing import Sequence, Optional
-from wiz.budget.schemas import PaymentInterface
+import pydantic
+import polars as pl
+import streamlit as st
+from dotenv import load_dotenv
+from wiz.budget import data_loader, payment, schemas
+
+load_dotenv()
+
+SHEET_ID = os.environ["SHEET_ID"]
+API_KEY = os.environ["API_KEY"]
+TABLE_NAME = "Fixed & variable costs"
 
 
-# Define Pydantic Model
-class Record(pydantic.BaseModel):
-    name: str
-    amount: float
-    due_date: datetime.date
+def load_expected_payments_to_polars(
+    *,
+    payment_interface: schemas.PaymentInterface,
+    google_sheet_id: str,
+    table_name: str,
+    api_key: str,
+) -> pl.DataFrame:
+    eval_date = payment_interface.rundate or datetime.date.today()
+    payments = data_loader.get_google_sheet_data(google_sheet_id, table_name, api_key)
+    return pl.DataFrame(
+        payment.calculate_total_payments(
+            eval_date=eval_date,
+            payments=payments,
+            monthly_periods=payment_interface.periods,
+        ),
+        schema=pl.Schema({"date": pl.Date, "living_cost": pl.Float32}),
+    )
 
 
 # Streamlit App
@@ -30,33 +50,40 @@ with st.container():
             "💸 Additional Monthly Cost", value=6_000.0, step=500.0
         )
 
-col1, col2 = st.columns([2, 1])
+col1, col2, col3 = st.columns([2, 1, 1])
 with col1:
     periods = st.number_input("📅 Number of Periods", value=12, step=1, min_value=1)
 with col2:
     rundate = st.date_input("📆 Run Date", value=datetime.date.today())
+with col3:
+    num_projects: int = st.number_input(
+        "📊 Planned Projects", value=1, step=1, min_value=0
+    )
 
 
-# Planned Projects - Dynamic Inputs
-st.subheader("📊 Planned Projects")
+st.title("📊 Planned Projects")
 planned_projects = []
-num_projects = st.number_input("How many projects?", value=1, step=1, min_value=0)
 
 for i in range(num_projects):
-    st.write(f"### Project {i+1}")
-    name = st.text_input(f"Project {i+1} Name", key=f"name_{i}")
-    amount = st.number_input(
-        f"Project {i+1} Amount", value=100.0, step=50.0, key=f"amount_{i}"
-    )
-    due_date = st.date_input(f"Project {i+1} Due Date", key=f"date_{i}")
+    col1, col2, col3 = st.columns([2, 1, 1])
+    with col1:
+        name = st.text_input(f"Project {i+1} Name", key=f"name_{i}")
+    with col2:
+        amount = st.number_input(
+            f"Project {i+1} Amount", value=10_000.0, step=1000.0, key=f"amount_{i}"
+        )
+    with col3:
+        due_date = st.date_input(f"Project {i+1} Due Date", key=f"date_{i}")
     if name:
-        planned_projects.append(Record(name=name, amount=amount, due_date=due_date))
+        planned_projects.append(
+            schemas.Record(description=name, price=amount, due_date=due_date)
+        )
 
 # Submit Button
 if st.button("Submit"):
     try:
         # Validate using Pydantic
-        payment_data = PaymentInterface(
+        payment_data = schemas.PaymentInterface(
             saldo=saldo,
             monthly_salary=monthly_salary,
             additional_cost=additional_cost,
@@ -64,8 +91,15 @@ if st.button("Submit"):
             periods=periods,
             rundate=rundate,
         )
-        st.success("✅ Payment Data Successfully Validated!")
-        st.json(payment_data.model_dump())  # Display structured data
+        st.success("✅ Payment Data Successfully loaded!")
+        df = load_expected_payments_to_polars(
+            payment_interface=payment_data,
+            google_sheet_id=SHEET_ID,
+            table_name=TABLE_NAME,
+            api_key=API_KEY,
+        )
+
+        st.write(df)  # Display structured data
 
     except pydantic.ValidationError as e:
         st.error("❌ Validation Error!")
