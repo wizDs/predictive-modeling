@@ -1,6 +1,6 @@
 import datetime
 import enum
-from typing import Any, Literal, NamedTuple, Optional, Sequence, assert_never
+from typing import Literal, NamedTuple, Optional, Sequence, assert_never
 import pydantic
 from dateutil import relativedelta
 

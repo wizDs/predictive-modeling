@@ -1,7 +1,7 @@
 import requests
 import datetime
 from typing import Sequence
-from src import schemas
+from wiz.budget import schemas
 
 REQUEST_TIMEOUT = datetime.timedelta(seconds=10)
 COLUMN_START = "A"
