@@ -11,6 +11,7 @@ budget = { path = "../../src/budget", develop = true }
 python = "^3.13"
 streamlit = "^1.42.0"
 python-dotenv = "^1.0.1"
+watchdog = "^6.0.0"
 
 [build-system]
 requires = ["poetry-core"]

@@ -3,8 +3,9 @@ import datetime
 import pydantic
 import polars as pl
 import streamlit as st
-from dotenv import load_dotenv
+from dateutil import relativedelta
 from wiz.budget import data_loader, payment, schemas
+from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -74,7 +75,7 @@ for i in range(num_projects):
         )
     with col3:
         due_date = st.date_input(f"Project {i+1} Due Date", key=f"date_{i}")
-    if name:
+    if amount:
         planned_projects.append(
             schemas.Record(description=name, price=amount, due_date=due_date)
         )
@@ -83,7 +84,7 @@ for i in range(num_projects):
 if st.button("Submit"):
     try:
         # Validate using Pydantic
-        payment_data = schemas.PaymentInterface(
+        payment_interface = schemas.PaymentInterface(
             saldo=saldo,
             monthly_salary=monthly_salary,
             additional_cost=additional_cost,
@@ -92,14 +93,50 @@ if st.button("Submit"):
             rundate=rundate,
         )
         st.success("✅ Payment Data Successfully loaded!")
-        df = load_expected_payments_to_polars(
-            payment_interface=payment_data,
+        total_payments_df = load_expected_payments_to_polars(
+            payment_interface=payment_interface,
             google_sheet_id=SHEET_ID,
             table_name=TABLE_NAME,
             api_key=API_KEY,
         )
 
-        st.write(df)  # Display structured data
+        projects_df = (
+            pl.DataFrame(
+                iter(payment_interface.planned_projects),
+                schema=pl.Schema(
+                    {"description": pl.Utf8, "date": pl.Date, "project_cost": pl.Int64}
+                ),
+            )
+            .with_columns(
+                pl.when(pl.col("date").dt.day() == 1)
+                .then(
+                    pl.col("date")
+                )  # Keep the date unchanged if it's the 1st of the month
+                .otherwise(
+                    pl.col("date").dt.offset_by("1mo").dt.truncate("1mo")
+                )  # Move to next month's start
+                .alias("date")
+            )
+            .group_by("date")
+            .agg(pl.sum("project_cost"))
+        )
+
+        df = (
+            total_payments_df.join(other=projects_df, on=["date"], how="left")
+            .with_columns(project_cost=pl.col("project_cost").fill_null(0))
+            .with_columns(salary=pl.lit(payment_interface.monthly_salary))
+            .with_columns(additional_cost=pl.lit(payment_interface.additional_cost))
+            .with_columns(
+                delta=(
+                    pl.col("salary")
+                    - pl.col("project_cost")
+                    - pl.col("living_cost")
+                    - pl.col("additional_cost")
+                )
+            )
+            .with_columns(saldo=payment_interface.saldo + pl.col("delta").cum_sum())
+        )
+        st.write(df)
 
     except pydantic.ValidationError as e:
         st.error("❌ Validation Error!")
