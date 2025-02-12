@@ -3,7 +3,6 @@ import datetime
 import pydantic
 import polars as pl
 import streamlit as st
-from dateutil import relativedelta
 from wiz.budget import data_loader, payment, schemas
 from dotenv import load_dotenv
 
