@@ -1,27 +1,31 @@
 import abc
-from typing import final
+from typing import Mapping, final, Any
 import numpy as np
 from wiz.evaluation import metric  # type: ignore
+
+
+DoubleArray = np.typing.ArrayLike
+FeatureArray = np.typing.NDArray[np.float64]
 
 
 class BaseEstimator(abc.ABC):
     """Abstract base class for estimators (classifiers or regressors)."""
 
     @abc.abstractmethod
-    def fit(self, features: np.ndarray, targets: np.ndarray):
+    def fit(self, features: FeatureArray, targets: DoubleArray) -> None:
         """Train the model on data X and labels y."""
 
     @abc.abstractmethod
-    def _predict(self, features: np.ndarray) -> np.ndarray:
+    def _predict(self, features: FeatureArray) -> DoubleArray:
         """Predict outputs for input data X."""
 
     @final
-    def predict(self, features: np.ndarray) -> np.ndarray:
+    def predict(self, features: FeatureArray) -> DoubleArray:
         """Predict outputs for input data X."""
         return self._predict(features)
 
     @abc.abstractmethod
-    def feature_importance(self, features: np.ndarray) -> np.ndarray:
+    def feature_importance(self, features: FeatureArray) -> Mapping[str, float]:
         """Predict outputs for input data X."""
 
 
@@ -29,13 +33,13 @@ class BinaryClassifier(BaseEstimator):
     """Abstract base class for classifiers."""
 
     @abc.abstractmethod
-    def predict_proba(self, features: np.ndarray) -> np.ndarray: ...
+    def predict_proba(self, features: FeatureArray) -> DoubleArray: ...
 
     @final
     def score(
         self,
-        features: np.ndarray,
-        targets: np.ndarray,
+        features: FeatureArray,
+        targets: DoubleArray,
         metric_type: metric.ClassifierMetric,
     ) -> float:
         """Calculate classification accuracy."""
@@ -53,8 +57,8 @@ class Regressor(BaseEstimator):
 
     def score(
         self,
-        features: np.ndarray,
-        targets: np.ndarray,
+        features: FeatureArray,
+        targets: DoubleArray,
         metric_type: metric.RegressorMetric,
     ) -> float:
         """Calculate R² score for regression."""

@@ -12,6 +12,7 @@ packages = [
 evaluation = { path = "../evaluation" }
 python = "^3.13"
 ipykernel = "^6.29.5"
+xgboost = "^2.1.4"
 
 
 [build-system]
