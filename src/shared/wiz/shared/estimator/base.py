@@ -1,5 +1,5 @@
 import abc
-from typing import Mapping, final, Any
+from typing import Mapping, final
 import numpy as np
 from wiz.evaluation import metric  # type: ignore
 
@@ -10,10 +10,6 @@ FeatureArray = np.typing.NDArray[np.float64]
 
 class BaseEstimator(abc.ABC):
     """Abstract base class for estimators (classifiers or regressors)."""
-
-    @property
-    @abc.abstractmethod
-    def clf(self): ...
 
     @abc.abstractmethod
     def fit(self, features: FeatureArray, targets: DoubleArray) -> None:
@@ -68,3 +64,6 @@ class Regressor(BaseEstimator):
         """Calculate R² score for regression."""
         prediction = self.predict(features)
         return metric_type.func(targets, prediction)
+
+
+class XGBoostClassifier(BaseEstimator): ...

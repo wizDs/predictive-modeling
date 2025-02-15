@@ -1,9 +1,9 @@
-import xgboost as xgb  # type: ignore
+import xgboost
 from .base import BinaryClassifier
 
 
 class XGBoostClassifier(BinaryClassifier):
 
-    def __init__(self):
-        super().__init__()
-        xgb.XGBClassifier()
+    def __init__(self) -> None:
+        # super().__init__()
+        clf = xgboost.XGBClassifier()
