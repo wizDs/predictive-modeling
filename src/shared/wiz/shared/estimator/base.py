@@ -1,6 +1,7 @@
 import abc
 from typing import final
 import numpy as np
+from wiz.evaluation import metric  # type: ignore
 
 
 class BaseEstimator(abc.ABC):
@@ -23,26 +24,39 @@ class BaseEstimator(abc.ABC):
     def feature_importance(self, features: np.ndarray) -> np.ndarray:
         """Predict outputs for input data X."""
 
-    @abc.abstractmethod
-    def score(self, features: np.ndarray, targets: np.ndarray) -> float:
-        """Evaluate model performance"""
 
-
-class Classifier(BaseEstimator):
+class BinaryClassifier(BaseEstimator):
     """Abstract base class for classifiers."""
 
-    def score(self, features: np.ndarray, targets: np.ndarray) -> float:
+    @abc.abstractmethod
+    def predict_proba(self, features: np.ndarray) -> np.ndarray: ...
+
+    @final
+    def score(
+        self,
+        features: np.ndarray,
+        targets: np.ndarray,
+        metric_type: metric.ClassifierMetric,
+    ) -> float:
         """Calculate classification accuracy."""
-        predictions = self.predict(features)
-        return np.mean(predictions == targets)  # Accuracy metric
+        match metric_type:
+            case metric.ClassifierMetric.AUC:
+                proba = self.predict_proba(features)
+                return metric_type.func(targets, proba)
+            case _:
+                prediction = self.predict(features)
+                return metric_type.func(targets, prediction)
 
 
 class Regressor(BaseEstimator):
     """Abstract base class for regressors."""
 
-    def score(self, features: np.ndarray, targets: np.ndarray) -> float:
+    def score(
+        self,
+        features: np.ndarray,
+        targets: np.ndarray,
+        metric_type: metric.RegressorMetric,
+    ) -> float:
         """Calculate R² score for regression."""
-        predictions = self.predict(features)
-        ss_total = np.sum((targets - np.mean(targets)) ** 2)
-        ss_residual = np.sum((targets - predictions) ** 2)
-        return 1 - (ss_residual / ss_total)  # R² score
+        prediction = self.predict(features)
+        return metric_type.func(targets, prediction)

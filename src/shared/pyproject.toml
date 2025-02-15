@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "shared"
+version = "0.1.0"
+description = ""
+authors = ["wiz <wilsonzhou92@gmail.com>"]
+readme = "README.md"
+packages = [
+    { include = "wiz/shared" },
+]
+
+[tool.poetry.dependencies]
+evaluation = { path = "../evaluation" }
+python = "^3.13"
+ipykernel = "^6.29.5"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
