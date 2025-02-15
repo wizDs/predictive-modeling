@@ -1,10 +1,13 @@
+import datetime
 import functools
 import pandas as pd
 import numpy as np
 import enum
+import pytz
+import xgboost
+from dateutil import relativedelta
 from sklearn import metrics
 from sklearn import model_selection
-from xgboost import XGBClassifier
 
 
 class FeatureColumn(enum.StrEnum):
@@ -14,9 +17,12 @@ class FeatureColumn(enum.StrEnum):
     LABEL_3M = "churned_3m"
 
 
-def feature_generation(monthly_payments: pd.DataFrame, user_table: pd.DataFrame):
+def feature_generation(
+    monthly_payments: pd.DataFrame,
+    user_table: pd.DataFrame,
+    latest_datetime: datetime.datetime = None,
+):
     def _next_user_payment(months: int, column_name: FeatureColumn) -> pd.DataFrame:
-
         return (
             df.groupby("user_id")["date"]
             .apply(lambda s: s.shift(-months))
@@ -27,6 +33,7 @@ def feature_generation(monthly_payments: pd.DataFrame, user_table: pd.DataFrame)
     # mutate dataframe
     df = monthly_payments.copy()
     df = df.sort_values(by=["user_id", "date"])
+
     # identify next payments
     next_1m = _next_user_payment(1, FeatureColumn.NEXT_1M)
     next_2m = _next_user_payment(2, FeatureColumn.NEXT_2M)
@@ -34,12 +41,16 @@ def feature_generation(monthly_payments: pd.DataFrame, user_table: pd.DataFrame)
     next_months = (next_1m, next_2m, next_3m)
 
     # add columns
-    df = functools.reduce(lambda df1, df2: df1.join(df2), next_months, initial=df)
+    df = functools.reduce(lambda df1, df2: df1.join(df2), next_months, df)
     # define label
+    # TODO: handle censored data (1/1-2018 was last observed payment date)
+    latest_observed_purchase = latest_datetime or datetime.datetime(2018, 1, 1)
+    latest_realized = latest_observed_purchase - relativedelta.relativedelta(months=3)
     df[FeatureColumn.LABEL_3M] = (
         df[FeatureColumn.NEXT_1M].isnull()
         & df[FeatureColumn.NEXT_2M].isnull()
         & df[FeatureColumn.NEXT_3M].isnull()
+        & (df["date"] <= latest_realized.replace(tzinfo=pytz.UTC))
     )
 
     # merge festures and labels
@@ -47,7 +58,6 @@ def feature_generation(monthly_payments: pd.DataFrame, user_table: pd.DataFrame)
         df[["user_id", "date", FeatureColumn.LABEL_3M]], on="user_id", how="left"
     ).set_index(["user_id", "date"])
 
-    # TODO: handle censored data (1/1-2018 was last observed payment date)
     return training_data
 
 
@@ -70,7 +80,7 @@ def split_kfold_and_evaluate_each(
 ) -> list[dict[str, float]]:
     output = []
 
-    xgb = XGBClassifier()
+    xgb = xgboost.XGBClassifier()
     splits = kfold.split(features, targets)
     for idx_train, idx_test in splits:
         features_train, targets_train = (
