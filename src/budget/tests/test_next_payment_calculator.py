@@ -1,13 +1,12 @@
 import datetime
 from typing import assert_never
-from src import payment
-from src.schemas import PaymentType
+from wiz.budget import payment
 
 
 def test_equal():
     today = datetime.date(2024, 3, 1)
     last_registered_payment_date = datetime.date(2024, 3, 1)
-    for payment_type in PaymentType:
+    for payment_type in payment.PaymentType:
         next_payment = payment.find_next_payment_iteratively(
             d=last_registered_payment_date,
             payment_type=payment_type,
@@ -19,7 +18,7 @@ def test_equal():
 def test_just_payed():
     today = datetime.date(2024, 3, 16)
     last_registered_payment_date = datetime.date(2024, 3, 1)
-    for payment_type in PaymentType:
+    for payment_type in payment.PaymentType:
         next_payment = payment.find_next_payment_iteratively(
             d=last_registered_payment_date,
             payment_type=payment_type,
@@ -42,7 +41,7 @@ def test_last_month():
             today=today,
         )
         print(next_payment)
-        if payment_type == PaymentType.MONTHLY:
+        if payment_type == payment.PaymentType.MONTHLY:
             assert next_payment == paymemt_date_curr_month + payment_type.relativedelta
         else:
             assert (
@@ -65,7 +64,7 @@ def test_two_months():
             today=today,
         )
         print(next_payment)
-        if payment_type == PaymentType.MONTHLY:
+        if payment_type == payment.PaymentType.MONTHLY:
             assert next_payment == paymemt_date_curr_month + payment_type.relativedelta
         else:
             assert (
@@ -88,7 +87,7 @@ def test_in_near_future():
             today=today,
         )
         print(next_payment)
-        if payment_type == PaymentType.MONTHLY:
+        if payment_type == payment.PaymentType.MONTHLY:
             assert next_payment == paymemt_date_curr_month + payment_type.relativedelta
         else:
             assert next_payment == last_registered_payment_date

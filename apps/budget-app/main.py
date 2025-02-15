@@ -2,9 +2,9 @@ import datetime
 import sys
 import os
 import polars as pl
-from src import payment
-from src import schemas
-from src import data_loader
+from wiz.budget import payment
+from wiz.budget import schemas
+from wiz.budget import data_loader
 
 SHEET_ID = os.environ["SHEET_ID"]
 API_KEY = os.environ["API_KEY"]
