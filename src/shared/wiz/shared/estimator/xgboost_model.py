@@ -1,9 +1,9 @@
-# import xgboost as xgb  # type: ignore
-# from wiz.shared import estimator  # type: ignore
+import xgboost as xgb  # type: ignore
+from .base import BinaryClassifier
 
 
-# class XGBoostClassifier(estimator.BinaryClassifier):
+class XGBoostClassifier(BinaryClassifier):
 
-#     def __init__(self):
-#         super().__init__()
-#         xgb.XGBClassifier()
+    def __init__(self):
+        super().__init__()
+        xgb.XGBClassifier()

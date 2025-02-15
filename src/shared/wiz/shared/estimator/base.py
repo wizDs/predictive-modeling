@@ -11,6 +11,10 @@ FeatureArray = np.typing.NDArray[np.float64]
 class BaseEstimator(abc.ABC):
     """Abstract base class for estimators (classifiers or regressors)."""
 
+    @property
+    @abc.abstractmethod
+    def clf(self): ...
+
     @abc.abstractmethod
     def fit(self, features: FeatureArray, targets: DoubleArray) -> None:
         """Train the model on data X and labels y."""

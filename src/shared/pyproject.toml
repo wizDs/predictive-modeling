@@ -15,6 +15,10 @@ ipykernel = "^6.29.5"
 xgboost = "^2.1.4"
 
 
+[tool.poetry.group.dev.dependencies]
+mypy = "^1.15.0"
+pytest = "^8.3.4"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
