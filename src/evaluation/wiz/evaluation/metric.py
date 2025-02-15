@@ -1,10 +1,7 @@
 import enum
-from typing import Callable, TypeAlias, ParamSpec, assert_never
+from typing import Callable, TypeAlias, assert_never
 import numpy as np
 from sklearn import metrics  # type: ignore
-
-
-Params = ParamSpec("Params")
 
 
 class ClassifierMetric(enum.StrEnum):
