@@ -12,6 +12,7 @@ pandas = "^2.2.3"
 polars = "^1.22.0"
 xgboost = "^2.1.4"
 ipykernel = "^6.29.5"
+scikit-learn = "^1.6.1"
 
 
 
