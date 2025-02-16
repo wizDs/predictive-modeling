@@ -13,6 +13,8 @@ class ClassifierMetric(enum.StrEnum):
     """Proportion of true positive predictions among all positive predictions (TP / (TP + FP))."""
     RECALL = "recall"
     """Proportion of actual positive instances that were correctly identified (TP / (TP + FN))."""
+    ERROR = "error"
+    """Binary classification error rate. It is calculated as #(wrong cases)/#(all cases). """
     AUC = "auc"
     """Area under the ROC curve, representing the model's ability to distinguish between classes."""
 
@@ -25,6 +27,8 @@ class ClassifierMetric(enum.StrEnum):
                 return metrics.precision_score
             case ClassifierMetric.RECALL:
                 return metrics.recall_score
+            case ClassifierMetric.ERROR:
+                return self._error
             case ClassifierMetric.AUC:
                 return self._auc
             case _:
@@ -34,6 +38,11 @@ class ClassifierMetric(enum.StrEnum):
     def _auc(y_true: np.ndarray, y_proba: np.ndarray, pos_label: int) -> float:
         fpr, tpr, _ = metrics.roc_curve(y_true, y_proba, pos_label=pos_label)
         return metrics.auc(fpr, tpr)
+
+    @staticmethod
+    def _error(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+        error = y_pred != y_true
+        return np.sum(error) / len(y_pred)
 
 
 class RegressorMetric(enum.StrEnum):
@@ -45,6 +54,8 @@ class RegressorMetric(enum.StrEnum):
     """Mean absolute error; average absolute difference between predictions and actual values."""
     RMSE = "rmse"
     """Root mean squared error; penalizes larger errors more heavily."""
+    RMSLE = "rmsle"
+    """Root mean squared log error; penalizes larger errors more heavily."""
     MAPE = "mape"
     """Mean absolute percentage error; average pct difference between predictions and actuals."""
     MEAN_ERROR = "mean_error"
@@ -61,6 +72,8 @@ class RegressorMetric(enum.StrEnum):
                 return metrics.mean_absolute_error
             case RegressorMetric.RMSE:
                 return metrics.root_mean_squared_error
+            case RegressorMetric.RMSLE:
+                return metrics.root_mean_squared_log_error
             case RegressorMetric.MAPE:
                 return metrics.mean_absolute_percentage_error
             case RegressorMetric.MEAN_ERROR:

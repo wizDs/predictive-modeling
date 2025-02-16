@@ -64,6 +64,3 @@ class Regressor(BaseEstimator):
         """Calculate R² score for regression."""
         prediction = self.predict(features)
         return metric_type.func(targets, prediction)
-
-
-class XGBoostClassifier(BaseEstimator): ...
