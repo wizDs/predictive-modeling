@@ -21,8 +21,8 @@ class XGBoostClassifier(pydantic.BaseModel):
     # 'eta': 0.01,
     # 'eval_metric': 'merror'}
 
-    estimator_type = Literal["XGBoostClassifier"]
-    objective: xgboost.sklearn.SklObjective = None
+    estimator_type: Literal["XGBoostClassifier"] = "XGBoostClassifier"
+    objective: str = "multi:softprob"
     eval_metric: str | Callable | None = None
     missing: float = np.nan
     gamma: Optional[float] = None
@@ -49,7 +49,38 @@ class XGBoostClassifier(pydantic.BaseModel):
     random_state: Optional[int] = None
 
 
-EstimatorType: TypeAlias = XGBoostClassifier
+class XGBoostRegressor(pydantic.BaseModel):
+    """https://xgboost.readthedocs.io/en/stable/parameter.html"""
+
+    estimator_type: Literal["XGBoostRegressor"] = "XGBoostRegressor"
+    objective: str = "reg:squarederror"
+    eval_metric: str | Callable | None = None
+    missing: float = np.nan
+    gamma: Optional[float] = None
+    reg_alpha: Optional[float] = None
+    reg_lambda: Optional[float] = None
+    max_depth: Optional[int] = None
+    max_leaves: Optional[int] = None
+    max_bin: Optional[int] = None
+    grow_policy: Optional[str] = None
+    learning_rate: Optional[float] = None
+    n_estimators: Optional[int] = None
+    verbosity: Optional[int] = None
+    booster: Optional[str] = None
+    tree_method: Optional[str] = None
+    n_jobs: Optional[int] = None
+    min_child_weight: Optional[float] = None
+    max_delta_step: Optional[float] = None
+    subsample: Optional[float] = None
+    sampling_method: Optional[str] = None
+    colsample_bytree: Optional[float] = None
+    colsample_bylevel: Optional[float] = None
+    colsample_bynode: Optional[float] = None
+    scale_pos_weight: Optional[float] = None
+    random_state: Optional[int] = None
+
+
+EstimatorType: TypeAlias = XGBoostClassifier | XGBoostRegressor
 
 EstimatorInterface = Annotated[
     EstimatorType, pydantic.Field(..., discriminator="estimator_type")
