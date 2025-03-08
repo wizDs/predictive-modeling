@@ -8,7 +8,9 @@ class XGBoostClassifier(BinaryClassifier):
 
     def __init__(self, estimator: modeling_interface.XGBoostClassifier) -> None:
         super().__init__()
-        self.clf = xgboost.XGBClassifier(**estimator.model_dump())
+        self.clf = xgboost.XGBClassifier(
+            **estimator.model_dump(exclude=["estimator_type"])
+        )
 
     def fit(self, features: np.ndarray, targets: np.ndarray) -> None:
         self.clf.fit(features, targets)
@@ -26,7 +28,9 @@ class XGBoostRegressor(Regressor):
 
     def __init__(self, estimator: modeling_interface.XGBoostRegressor) -> None:
         super().__init__()
-        self.clf = xgboost.XGBRegressor(**estimator.model_dump())
+        self.clf = xgboost.XGBRegressor(
+            **estimator.model_dump(exclude=["estimator_type"])
+        )
 
     def fit(self, features: np.ndarray, targets: np.ndarray) -> None:
         self.clf.fit(features, targets)
