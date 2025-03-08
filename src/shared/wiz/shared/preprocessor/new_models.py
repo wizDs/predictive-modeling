@@ -112,27 +112,14 @@ class DefaultPreProcessor(PreProcessor):
         categorical_columns: Sequence[str],
         categorical_proc_type: CategoricalProcessor,
     ) -> compose.ColumnTransformer:
-        numerical_pipeline = Pipeline(
-            steps=[
-                (
-                    "imputer",
-                    impute.SimpleImputer(fill_value=-1).set_output(
-                        transform=OutputType.POLARS
-                    ),
-                ),
-                (
-                    "scaler",
-                    preprocessing.StandardScaler().set_output(
-                        transform=OutputType.POLARS
-                    ),
-                ),
-            ]
-        )
-        categorical_pipeline = self._categorical_pipeline(categorical_proc_type)
         return compose.ColumnTransformer(
             transformers=[
-                ("num", numerical_pipeline, numerical_columns),
-                ("cat", categorical_pipeline, categorical_columns),
+                ("num", self._numerical_pipeline(), numerical_columns),
+                (
+                    "cat",
+                    self._categorical_pipeline(categorical_proc_type),
+                    categorical_columns,
+                ),
             ],
             verbose_feature_names_out=False,
         ).set_output(transform=OutputType.POLARS)
@@ -163,6 +150,25 @@ class DefaultPreProcessor(PreProcessor):
                 ),
                 (
                     "standard_scalar",
+                    preprocessing.StandardScaler().set_output(
+                        transform=OutputType.POLARS
+                    ),
+                ),
+            ]
+        )
+
+    @staticmethod
+    def _numerical_pipeline(impute_value: float = -1.0) -> pipeline.Pipeline:
+        return Pipeline(
+            steps=[
+                (
+                    "imputer",
+                    impute.SimpleImputer(fill_value=impute_value).set_output(
+                        transform=OutputType.POLARS
+                    ),
+                ),
+                (
+                    "scaler",
                     preprocessing.StandardScaler().set_output(
                         transform=OutputType.POLARS
                     ),
