@@ -80,7 +80,11 @@ class XGBoostRegressor(pydantic.BaseModel):
     random_state: Optional[int] = None
 
 
-EstimatorType: TypeAlias = XGBoostClassifier | XGBoostRegressor
+class LinearRegression(pydantic.BaseModel):
+    estimator_type: Literal["LinearRegression"] = "LinearRegression"
+
+
+EstimatorType: TypeAlias = XGBoostClassifier | XGBoostRegressor | LinearRegression
 
 EstimatorInterface = Annotated[
     EstimatorType, pydantic.Field(..., discriminator="estimator_type")

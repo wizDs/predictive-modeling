@@ -11,6 +11,8 @@ def model_from_type(
             return estimator.XGBoostClassifier(estimator_type)
         case estimator_interface.XGBoostRegressor():
             return estimator.XGBoostRegressor(estimator_type)
+        case estimator_interface.LinearRegression():
+            return estimator.LinearModel(estimator_type)
 
 
 def preprocessor_from_type(preprocessor_type: preproc_interface.DefaultPreProcessor):
