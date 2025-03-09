@@ -52,3 +52,12 @@ class PowerTransformer(TargetTransformer[np.ndarray]):
         if 1 / self.l > 0:
             target = np.clip(target, 0, LARGE_EXP)
         return np.power(target, 1 / self.l)
+
+
+class DummyTransformer(TargetTransformer[np.ndarray]):
+
+    def func(self, target: np.ndarray) -> np.ndarray:
+        return target
+
+    def inv_func(self, target: np.ndarray) -> np.ndarray:
+        return target
