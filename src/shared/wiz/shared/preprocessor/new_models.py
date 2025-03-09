@@ -155,6 +155,32 @@ def read_data(path: pathlib.Path):
     )
 
 
+@dataclass
+class TrainValidateData:
+    train_features: pl.DataFrame
+    train_targets: np.ndarray
+    test_features: pl.DataFrame
+    test_targets: np.ndarray
+
+
+def split_train_test(df: pl.DataFrame, /):
+
+    test_data_df = df.sample(n=len(df) * 0.2)
+    train_data_df = df.join(test_data_df, on="id", how="anti")
+
+    assert len(set(df["id"])) == len(df["id"]), "id must be unique"
+    assert not set(df["id"]) - (
+        set(test_data_df["id"]) | set(train_data_df["id"])
+    ), "train-test-split must cover all ids"
+
+    return TrainValidateData(
+        train_features=train_data_df.drop("id", "saleprice"),
+        train_targets=train_data_df.select("saleprice"),
+        test_features=test_data_df.drop("id", "saleprice"),
+        test_targets=test_data_df.select("saleprice"),
+    )
+
+
 if __name__ == "__main__":
 
     # num_cols = make_column_selector(dtype_include=np.number)
@@ -175,153 +201,103 @@ if __name__ == "__main__":
 
     data_df = read_data(data_path)
 
-    test_data_df = data_df.sample(n=len(data_df) * 0.2)
-    train_data_df = data_df.join(test_data_df, on="id", how="anti")
-
-    assert len(set(data_df["id"])) == len(data_df["id"]), "id must be unique"
-    assert not set(data_df["id"]) - (
-        set(test_data_df["id"]) | set(train_data_df["id"])
-    ), "train-test-split must cover all ids"
-
-    test_features_df = test_data_df.drop("id", "saleprice")
-    test_targets_df = test_data_df.select("saleprice")
-
-    features_df = train_data_df.drop("id", "saleprice")
-    targets_df = train_data_df.select("saleprice")
-
     class TrainInputInterface(pydantic.BaseModel):
         preprocessor: preproc_interface.DefaultPreProcessor
         estimator: estimator_interface.EstimatorInterface
         # target_transformer: target_transformer.TargetTransformer | None = None
 
+    def evaluate_estimator(
+        train_interface: TrainInputInterface,
+        data: TrainValidateData,
+    ) -> dict[str, float]:
+        preproc = get_model.preprocessor_from_type(train_interface.preprocessor)
+        _estimator = get_model.model_from_type(train_interface.estimator)
+        preproc.fit(data.train_features, data.train_targets)
+
+        _estimator.fit(
+            preproc.transform(data.train_features).to_numpy(), data.train_targets
+        )
+        predictions = _estimator.predict(
+            preproc.transform(data.test_features).to_numpy()
+        )
+
+        return {
+            "mape": round(
+                metrics.mean_absolute_percentage_error(data.test_targets, predictions),
+                3,
+            ),
+            "mae": round(metrics.mean_absolute_error(data.test_targets, predictions)),
+            "rmse": round(
+                metrics.root_mean_squared_error(data.test_targets, predictions), 3
+            ),
+        }
+
     # for col in features_df[cat_cols].columns:
     #     features_df[col] = features_df[col].fillna("")
     # X[num_cols].pipe(num_ppl.fit_transform).describe().transpose().round(2)
+    output = []
+    for i in range(100):
+        train_validation_df = split_train_test(data_df)
 
-    num_cols = features_df.select(pl.selectors.numeric()).columns
-    cat_cols = features_df.select(pl.selectors.string()).columns
-    basic_columns = preproc_interface.BasicColumns(
-        numerical_columns=num_cols, categorical_columns=cat_cols
-    )
-    num_columns_only = preproc_interface.BasicColumns(
-        numerical_columns=num_cols, categorical_columns=[]
-    )
+        basic_columns = preproc_interface.BasicColumns(
+            numerical_columns=train_validation_df.train_features.select(
+                pl.selectors.numeric()
+            ).columns,
+            categorical_columns=train_validation_df.train_features.select(
+                pl.selectors.string()
+            ).columns,
+        )
+        num_columns_only = preproc_interface.BasicColumns(
+            numerical_columns=train_validation_df.train_features.select(
+                pl.selectors.numeric()
+            ).columns,
+            categorical_columns=[],
+        )
 
-    pre_proc_target_encoder = preprocessor.DefaultPreProcessor(
-        basic_columns=basic_columns,
-        categorical_proc_type=preproc_interface.CategoricalProcessor.TARGET_ENCODER,
-    )
-    pre_proc_ohe = preprocessor.DefaultPreProcessor(
-        basic_columns=basic_columns,
-        categorical_proc_type=preproc_interface.CategoricalProcessor.ONE_HOT_ENCODER,
-    )
-    pre_proc_oe = preprocessor.DefaultPreProcessor(
-        basic_columns=basic_columns,
-        categorical_proc_type=preproc_interface.CategoricalProcessor.ORDINAL_ENCODER,
-    )
-    pre_proc_num_only = preprocessor.DefaultPreProcessor(
-        basic_columns=num_columns_only,
-        categorical_proc_type=preproc_interface.CategoricalProcessor.ONE_HOT_ENCODER,
-    )
+        runs = [
+            (
+                "num_columns_only",
+                num_columns_only,
+                preproc_interface.CategoricalProcessor.ONE_HOT_ENCODER,
+            ),
+            (
+                "basic_columns",
+                basic_columns,
+                preproc_interface.CategoricalProcessor.ONE_HOT_ENCODER,
+            ),
+            (
+                "basic_columns",
+                basic_columns,
+                preproc_interface.CategoricalProcessor.ORDINAL_ENCODER,
+            ),
+            (
+                "basic_columns",
+                basic_columns,
+                preproc_interface.CategoricalProcessor.TARGET_ENCODER,
+            ),
+        ]
 
-    pre_proc_ohe.fit(features_df)
-    pre_proc_oe.fit(features_df)
-    pre_proc_num_only.fit(features_df)
-    pre_proc_target_encoder.fit(features_df, targets_df)
+        for name, _basic_columns, proc_type in runs:
+            train_interface = TrainInputInterface(
+                preprocessor=preproc_interface.DefaultPreProcessor(
+                    basic_columns=_basic_columns,
+                    categorical_processor_type=proc_type,
+                ),
+                estimator=estimator_interface.XGBoostRegressor(),
+            )
+            eval_metrics = evaluate_estimator(
+                train_interface=train_interface,
+                data=train_validation_df,
+            )
+            output += [(name, proc_type.value, eval_metrics)]
+
+    _df = pl.DataFrame(map(lambda t: {"name": t[0], "type": t[1], **t[2]}, output))
+    _df.group_by(["name", "type"]).agg(
+        [pl.mean("mape").alias("avg_mape"), pl.std("mape").alias("std_mape")]
+    )
 
     log_transformer = target_transformer.LnTransformer()
     _log_targets_df = log_transformer.transform(targets_df["saleprice"].to_numpy())
-
-    # normal
-    model = get_model.model_from_type(estimator_interface.XGBoostRegressor())
-    model.fit(
-        features=pre_proc_ohe.transform(features_df).to_numpy(),
-        targets=targets_df["saleprice"].to_numpy(),
-    )
-
-    _pred = model.predict(features=pre_proc_ohe.transform(test_features_df))
-    _target = test_targets_df["saleprice"].to_numpy()
-    metrics.mean_absolute_percentage_error(_target, _pred)
-
-    # # log
-    # model = XGBoostRegressor(estimator=modeling_interface.XGBoostRegressor())
-    # model.fit(
-    #     features=pre_proc.transform(features_df).to_numpy(), targets=_log_targets_df
-    # )
-
-    # _log_pred = model.predict(features=pre_proc.transform(test_features_df))
-    # _pred = log_transformer.transform(_log_pred, inverse=True).round()
-    # _target = test_targets_df["saleprice"].to_numpy()
-
-    # metrics.mean_absolute_percentage_error(_target, _pred)
-
-    # pre_proc_num_only
-    # normal
-    model = get_model.model_from_type(estimator_interface.XGBoostRegressor())
-    model.fit(
-        features=pre_proc_num_only.transform(features_df).to_numpy(),
-        targets=targets_df["saleprice"].to_numpy(),
-    )
-
-    _pred = model.predict(features=pre_proc_num_only.transform(test_features_df))
-    _target = test_targets_df["saleprice"].to_numpy()
-    print(
-        "normal-num_only",
-        round(metrics.mean_absolute_percentage_error(_target, _pred), 3),
-        round(metrics.median_absolute_error(_target, _pred), 3),
-        round(metrics.mean_absolute_error(_target, _pred), 3),
-    )
-
-    # pre_proc_oe
-    # normal
-    model = get_model.model_from_type(estimator_interface.XGBoostRegressor())
-    model.fit(
-        features=pre_proc_oe.transform(features_df).to_numpy(),
-        targets=targets_df["saleprice"].to_numpy(),
-    )
-
-    _pred = model.predict(features=pre_proc_oe.transform(test_features_df))
-    _target = test_targets_df["saleprice"].to_numpy()
-    print(
-        "normal-oe",
-        round(metrics.mean_absolute_percentage_error(_target, _pred), 3),
-        round(metrics.median_absolute_error(_target, _pred), 3),
-        round(metrics.mean_absolute_error(_target, _pred), 3),
-    )
-
-    # pre_proc_ohe
-    # normal
-    model = get_model.model_from_type(estimator_interface.XGBoostRegressor())
-    model.fit(
-        features=pre_proc_ohe.transform(features_df).to_numpy(),
-        targets=targets_df["saleprice"].to_numpy(),
-    )
-
-    _pred = model.predict(features=pre_proc_ohe.transform(test_features_df))
-    _target = test_targets_df["saleprice"].to_numpy()
-    print(
-        "normal-ohe",
-        round(metrics.mean_absolute_percentage_error(_target, _pred), 3),
-        round(metrics.median_absolute_error(_target, _pred), 3),
-        round(metrics.mean_absolute_error(_target, _pred), 3),
-    )
-
-    # pre_proc_target_encoder
-    # normal
-    model = get_model.model_from_type(estimator_interface.XGBoostRegressor())
-    model.fit(
-        features=pre_proc_target_encoder.transform(features_df).to_numpy(),
-        targets=targets_df["saleprice"].to_numpy(),
-    )
-
-    _pred = model.predict(features=pre_proc_target_encoder.transform(test_features_df))
-    _target = test_targets_df["saleprice"].to_numpy()
-    print(
-        "normal-target-encoder",
-        round(metrics.mean_absolute_percentage_error(_target, _pred), 3),
-        round(metrics.median_absolute_error(_target, _pred), 3),
-        round(metrics.mean_absolute_error(_target, _pred), 3),
-    )
 
     # where
     test_features_df.with_columns(

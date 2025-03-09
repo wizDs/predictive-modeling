@@ -30,17 +30,12 @@ class PreProcessor(abc.ABC):
 
 class DefaultPreProcessor(PreProcessor):
 
-    def __init__(
-        self,
-        basic_columns: preproc_interface.BasicColumns,
-        categorical_proc_type: preproc_interface.CategoricalProcessor,
-    ):
+    def __init__(self, interface: preproc_interface.DefaultPreProcessor, /):
         super().__init__()
-        # self.basic_columns = basic_columns
         self.pipeline = self.construct_pipeline(
-            numerical_columns=basic_columns.numerical_columns,
-            categorical_columns=basic_columns.categorical_columns,
-            categorical_proc_type=categorical_proc_type,
+            numerical_columns=interface.basic_columns.numerical_columns,
+            categorical_columns=interface.basic_columns.categorical_columns,
+            categorical_proc_type=interface.categorical_processor_type,
         )
 
     def fit(self, features: pl.DataFrame, targets: pl.DataFrame | None = None) -> None:

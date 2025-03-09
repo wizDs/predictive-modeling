@@ -6,7 +6,7 @@ from wiz.interface import estimator_interface
 
 class XGBoostClassifier(BinaryClassifier):
 
-    def __init__(self, estimator: estimator_interface.XGBoostClassifier) -> None:
+    def __init__(self, estimator: estimator_interface.XGBoostClassifier, /) -> None:
         super().__init__()
         self.clf = xgboost.XGBClassifier(
             **estimator.model_dump(exclude=["estimator_type"])
@@ -26,7 +26,7 @@ class XGBoostClassifier(BinaryClassifier):
 
 class XGBoostRegressor(Regressor):
 
-    def __init__(self, estimator: estimator_interface.XGBoostRegressor) -> None:
+    def __init__(self, estimator: estimator_interface.XGBoostRegressor, /) -> None:
         super().__init__()
         self.clf = xgboost.XGBRegressor(
             **estimator.model_dump(exclude=["estimator_type"])
