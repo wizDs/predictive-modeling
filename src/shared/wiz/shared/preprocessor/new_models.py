@@ -51,9 +51,9 @@ def split_train_test(df: pl.DataFrame, /):
 
     return TrainValidateData(
         train_features=train_data_df.drop("id", "saleprice"),
-        train_targets=train_data_df.select("saleprice").to_numpy(),
+        train_targets=train_data_df.get_column("saleprice"),
         test_features=test_data_df.drop("id", "saleprice"),
-        test_targets=test_data_df.select("saleprice").to_numpy(),
+        test_targets=test_data_df.get_column("saleprice"),
     )
 
 
@@ -223,7 +223,7 @@ if __name__ == "__main__":
     )
 
     output = []
-    for i in range(40):
+    for i in range(30):
         train_validation_df = split_train_test(data_df)
 
         runs = [
@@ -257,6 +257,7 @@ if __name__ == "__main__":
                 for est in (
                     estimator_interface.XGBoostRegressor(),
                     estimator_interface.LinearRegression(),
+                    estimator_interface.KNeighborsRegressor(),
                 ):
                     train_interface = TrainInputInterface(
                         preprocessor=preproc_interface.DefaultPreProcessor(

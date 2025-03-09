@@ -1,6 +1,9 @@
 from .estimator import BaseEstimator, BinaryClassifier, Regressor
 from .xgboost_model import XGBoostClassifier, XGBoostRegressor
 from .linear import LinearModel
+from .lasso import LassoModel
+from .neighbors import KNeighborsRegressor
+
 
 __all__ = (
     "BaseEstimator",
@@ -9,4 +12,6 @@ __all__ = (
     "XGBoostClassifier",
     "XGBoostRegressor",
     "LinearModel",
+    "LassoModel",
+    "KNeighborsRegressor",
 )

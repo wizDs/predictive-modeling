@@ -84,7 +84,21 @@ class LinearRegression(pydantic.BaseModel):
     estimator_type: Literal["LinearRegression"] = "LinearRegression"
 
 
-EstimatorType: TypeAlias = XGBoostClassifier | XGBoostRegressor | LinearRegression
+class LassoModel(pydantic.BaseModel):
+    estimator_type: Literal["LassoModel"] = "LassoModel"
+
+
+class KNeighborsRegressor(pydantic.BaseModel):
+    estimator_type: Literal["KNeighborsRegressor"] = "KNeighborsRegressor"
+
+
+EstimatorType: TypeAlias = (
+    XGBoostClassifier
+    | XGBoostRegressor
+    | LinearRegression
+    | LassoModel
+    | KNeighborsRegressor
+)
 
 EstimatorInterface = Annotated[
     EstimatorType, pydantic.Field(..., discriminator="estimator_type")
