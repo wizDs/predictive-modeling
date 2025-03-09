@@ -8,173 +8,27 @@ from functools import partial
 from typing import Callable, Generic, Iterable, ParamSpec, Self, TypeVar, final
 import json
 import numpy as np
+import pydantic
 from sklearn import pipeline
-from wiz.interface import modeling_interface
+from wiz.interface import estimator_interface, preproc_interface
+from wiz.shared import get_model
 import xgboost
 from toolz.itertoolz import pluck
 import polars as pl
-from sklearn import compose
 from sklearn.pipeline import Pipeline
-from sklearn import preprocessing, impute
-from sklearn import linear_model
 from sklearn import metrics
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.model_selection import KFold
-from wiz.shared.estimator.xgboost_model import XGBoostClassifier, XGBoostRegressor
+from wiz.shared.estimator import estimator
+from wiz.shared.preprocessor import preprocessor
+from wiz.shared.target_transformer import target_transformer
 
 # from .eval_regression import ModelReport, ModelReportBuilder
 
 # a frunction that returns an esimator, that is a full ds-model
 ModelConstructor = Callable[[None], BaseEstimator]
 PreprocessorConstructor = Callable[[None], TransformerMixin]
-
-
-class CategoricalProcessor(enum.StrEnum):
-    ONE_HOT_ENCODER = "one_hot_encoder"
-    ORDINAL_ENCODER = "ordinal_encoder"
-    TARGET_ENCODER = "target_encoder"
-
-
-class OutputType(enum.StrEnum):
-    PANDAS = "pandas"
-    POLARS = "polars"
-
-
-Target = TypeVar("Target")  # Return type
-Params = ParamSpec("Params")  # Parameter specification for *args and **kwargs
-
-EPSILON: float = 0.00001
-
-
-class TargetTransformer(abc.ABC, Generic[Target]):
-
-    @abc.abstractmethod
-    def func(self, target: Target) -> Target: ...
-
-    @abc.abstractmethod
-    def inv_func(self, target: Target) -> Target: ...
-
-    @final
-    def transform(self, target: Target, inverse: bool = False) -> Target:
-        if inverse:
-            return self.inv_func(target)
-        return self.func(target)
-
-
-class LogTransformer(TargetTransformer[np.ndarray]):
-
-    def func(self, target: np.ndarray) -> np.ndarray:
-        return np.log(np.clip(target, EPSILON, 99999999))
-
-    def inv_func(self, target: np.ndarray) -> np.ndarray:
-        return np.exp(np.clip(target, -100, 30))
-
-
-class PreProcessor(abc.ABC):
-
-    @abc.abstractmethod
-    def _transform(self, features: pl.DataFrame, /) -> pl.DataFrame: ...
-
-    @final
-    def transform(self, features: pl.DataFrame, /) -> pl.DataFrame:
-        return self._transform(features)
-
-
-class DefaultPreProcessor(PreProcessor):
-
-    def __init__(
-        self,
-        numerical_columns: Sequence[str],
-        categorical_columns: Sequence[str],
-        categorical_proc_type: CategoricalProcessor,
-    ):
-        super().__init__()
-
-        self.pipeline = self.construct_pipeline(
-            numerical_columns=numerical_columns,
-            categorical_columns=categorical_columns,
-            categorical_proc_type=categorical_proc_type,
-        )
-
-    def fit(self, features: pl.DataFrame, targets: pl.DataFrame | None = None) -> None:
-        if targets is not None:
-            self.pipeline.fit(features, targets)
-        else:
-            self.pipeline.fit(features)
-
-    def _transform(self, features: pl.DataFrame, /) -> pl.DataFrame:
-        return self.pipeline.transform(features)
-
-    def construct_pipeline(
-        self,
-        numerical_columns: Sequence[str],
-        categorical_columns: Sequence[str],
-        categorical_proc_type: CategoricalProcessor,
-    ) -> compose.ColumnTransformer:
-        return compose.ColumnTransformer(
-            transformers=[
-                ("num", self._numerical_pipeline(), numerical_columns),
-                (
-                    "cat",
-                    self._categorical_pipeline(categorical_proc_type),
-                    categorical_columns,
-                ),
-            ],
-            verbose_feature_names_out=False,
-        ).set_output(transform=OutputType.POLARS)
-
-    @staticmethod
-    def _categorical_pipeline(proc_type: CategoricalProcessor) -> pipeline.Pipeline:
-        match proc_type:
-            case CategoricalProcessor.ORDINAL_ENCODER:
-                preproc_step = preprocessing.OrdinalEncoder(
-                    handle_unknown="use_encoded_value",
-                    unknown_value=-1,
-                    encoded_missing_value=-1,
-                )
-            case CategoricalProcessor.ONE_HOT_ENCODER:
-                preproc_step = preprocessing.OneHotEncoder(
-                    handle_unknown="infrequent_if_exist",
-                    drop="first",
-                    sparse_output=False,
-                )
-            case CategoricalProcessor.TARGET_ENCODER:
-                preproc_step = preprocessing.TargetEncoder()
-
-        return pipeline.Pipeline(
-            steps=[
-                (
-                    proc_type,
-                    preproc_step.set_output(transform=OutputType.POLARS),
-                ),
-                (
-                    "standard_scalar",
-                    preprocessing.StandardScaler().set_output(
-                        transform=OutputType.POLARS
-                    ),
-                ),
-            ]
-        )
-
-    @staticmethod
-    def _numerical_pipeline(impute_value: float = -1.0) -> pipeline.Pipeline:
-        return Pipeline(
-            steps=[
-                (
-                    "imputer",
-                    impute.SimpleImputer(fill_value=impute_value).set_output(
-                        transform=OutputType.POLARS
-                    ),
-                ),
-                (
-                    "scaler",
-                    preprocessing.StandardScaler().set_output(
-                        transform=OutputType.POLARS
-                    ),
-                ),
-            ]
-        )
 
 
 def create_xgboost(preprocessor: PreprocessorConstructor = None) -> Pipeline:
@@ -335,42 +189,51 @@ if __name__ == "__main__":
     features_df = train_data_df.drop("id", "saleprice")
     targets_df = train_data_df.select("saleprice")
 
+    class TrainInputInterface(pydantic.BaseModel):
+        preprocessor: preproc_interface.DefaultPreProcessor
+        estimator: estimator_interface.EstimatorInterface
+        # target_transformer: target_transformer.TargetTransformer | None = None
+
     # for col in features_df[cat_cols].columns:
     #     features_df[col] = features_df[col].fillna("")
     # X[num_cols].pipe(num_ppl.fit_transform).describe().transpose().round(2)
 
     num_cols = features_df.select(pl.selectors.numeric()).columns
     cat_cols = features_df.select(pl.selectors.string()).columns
-    pre_proc_target_encoder = DefaultPreProcessor(
-        numerical_columns=num_cols,
-        categorical_columns=cat_cols,
-        categorical_proc_type=CategoricalProcessor.TARGET_ENCODER,
+    basic_columns = preproc_interface.BasicColumns(
+        numerical_columns=num_cols, categorical_columns=cat_cols
     )
-    pre_proc_ohe = DefaultPreProcessor(
-        numerical_columns=num_cols,
-        categorical_columns=cat_cols,
-        categorical_proc_type=CategoricalProcessor.ONE_HOT_ENCODER,
+    num_columns_only = preproc_interface.BasicColumns(
+        numerical_columns=num_cols, categorical_columns=[]
     )
-    pre_proc_oe = DefaultPreProcessor(
-        numerical_columns=num_cols,
-        categorical_columns=cat_cols,
-        categorical_proc_type=CategoricalProcessor.ORDINAL_ENCODER,
+
+    pre_proc_target_encoder = preprocessor.DefaultPreProcessor(
+        basic_columns=basic_columns,
+        categorical_proc_type=preproc_interface.CategoricalProcessor.TARGET_ENCODER,
     )
-    pre_proc_num_only = DefaultPreProcessor(
-        numerical_columns=num_cols,
-        categorical_columns=[],
-        categorical_proc_type=CategoricalProcessor.ONE_HOT_ENCODER,
+    pre_proc_ohe = preprocessor.DefaultPreProcessor(
+        basic_columns=basic_columns,
+        categorical_proc_type=preproc_interface.CategoricalProcessor.ONE_HOT_ENCODER,
     )
+    pre_proc_oe = preprocessor.DefaultPreProcessor(
+        basic_columns=basic_columns,
+        categorical_proc_type=preproc_interface.CategoricalProcessor.ORDINAL_ENCODER,
+    )
+    pre_proc_num_only = preprocessor.DefaultPreProcessor(
+        basic_columns=num_columns_only,
+        categorical_proc_type=preproc_interface.CategoricalProcessor.ONE_HOT_ENCODER,
+    )
+
     pre_proc_ohe.fit(features_df)
     pre_proc_oe.fit(features_df)
     pre_proc_num_only.fit(features_df)
     pre_proc_target_encoder.fit(features_df, targets_df)
 
-    log_transformer = LogTransformer()
+    log_transformer = target_transformer.LnTransformer()
     _log_targets_df = log_transformer.transform(targets_df["saleprice"].to_numpy())
 
     # normal
-    model = XGBoostRegressor(estimator=modeling_interface.XGBoostRegressor())
+    model = get_model.model_from_type(estimator_interface.XGBoostRegressor())
     model.fit(
         features=pre_proc_ohe.transform(features_df).to_numpy(),
         targets=targets_df["saleprice"].to_numpy(),
@@ -394,7 +257,7 @@ if __name__ == "__main__":
 
     # pre_proc_num_only
     # normal
-    model = XGBoostRegressor(estimator=modeling_interface.XGBoostRegressor())
+    model = get_model.model_from_type(estimator_interface.XGBoostRegressor())
     model.fit(
         features=pre_proc_num_only.transform(features_df).to_numpy(),
         targets=targets_df["saleprice"].to_numpy(),
@@ -411,7 +274,7 @@ if __name__ == "__main__":
 
     # pre_proc_oe
     # normal
-    model = XGBoostRegressor(estimator=modeling_interface.XGBoostRegressor())
+    model = get_model.model_from_type(estimator_interface.XGBoostRegressor())
     model.fit(
         features=pre_proc_oe.transform(features_df).to_numpy(),
         targets=targets_df["saleprice"].to_numpy(),
@@ -428,7 +291,7 @@ if __name__ == "__main__":
 
     # pre_proc_ohe
     # normal
-    model = XGBoostRegressor(estimator=modeling_interface.XGBoostRegressor())
+    model = get_model.model_from_type(estimator_interface.XGBoostRegressor())
     model.fit(
         features=pre_proc_ohe.transform(features_df).to_numpy(),
         targets=targets_df["saleprice"].to_numpy(),
@@ -445,7 +308,7 @@ if __name__ == "__main__":
 
     # pre_proc_target_encoder
     # normal
-    model = XGBoostRegressor(estimator=modeling_interface.XGBoostRegressor())
+    model = get_model.model_from_type(estimator_interface.XGBoostRegressor())
     model.fit(
         features=pre_proc_target_encoder.transform(features_df).to_numpy(),
         targets=targets_df["saleprice"].to_numpy(),
