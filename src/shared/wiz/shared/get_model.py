@@ -17,6 +17,10 @@ def model_from_type(
             return estimator.LassoModel(estimator_type)
         case estimator_interface.KNeighborsRegressor():
             return estimator.KNeighborsRegressor(estimator_type)
+        case estimator_interface.LGBMRegressor():
+            return estimator.LGBMRegressor(estimator_type)
+        case estimator_interface.LGBMClassifier():
+            return estimator.LGBMClassifier(estimator_type)
 
 
 def preprocessor_from_type(preprocessor_type: preproc_interface.DefaultPreProcessor):

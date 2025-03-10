@@ -92,12 +92,22 @@ class KNeighborsRegressor(pydantic.BaseModel):
     estimator_type: Literal["KNeighborsRegressor"] = "KNeighborsRegressor"
 
 
+class LGBMClassifier(pydantic.BaseModel):
+    estimator_type: Literal["LGBMClassifier"] = "LGBMClassifier"
+
+
+class LGBMRegressor(pydantic.BaseModel):
+    estimator_type: Literal["LGBMRegressor"] = "LGBMRegressor"
+
+
 EstimatorType: TypeAlias = (
     XGBoostClassifier
     | XGBoostRegressor
     | LinearRegression
     | LassoModel
     | KNeighborsRegressor
+    | LGBMClassifier
+    | LGBMRegressor
 )
 
 EstimatorInterface = Annotated[

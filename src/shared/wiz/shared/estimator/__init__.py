@@ -3,6 +3,7 @@ from .xgboost_model import XGBoostClassifier, XGBoostRegressor
 from .linear import LinearModel
 from .lasso import LassoModel
 from .neighbors import KNeighborsRegressor
+from .lightgbm import LGBMClassifier, LGBMRegressor
 
 
 __all__ = (
@@ -14,4 +15,6 @@ __all__ = (
     "LinearModel",
     "LassoModel",
     "KNeighborsRegressor",
+    "LGBMRegressor",
+    "LGBMClassifier",
 )
