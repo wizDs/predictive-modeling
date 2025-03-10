@@ -20,6 +20,6 @@ class BasicColumns(pydantic.BaseModel):
     categorical_columns: Sequence[str]
 
 
-class DefaultPreProcessor(pydantic.BaseModel):
+class PreProcInterface(pydantic.BaseModel):
     basic_columns: BasicColumns
     categorical_processor_type: CategoricalProcessor

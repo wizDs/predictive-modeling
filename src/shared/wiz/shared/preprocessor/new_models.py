@@ -10,7 +10,7 @@ import json
 import numpy as np
 import pydantic
 from sklearn import pipeline
-from wiz.interface import estimator_interface, preproc_interface
+from wiz.interface import estimator_interface, preproc_interface, target_interface
 from wiz.shared import get_model
 import xgboost
 from toolz.itertoolz import pluck
@@ -26,13 +26,9 @@ from wiz.shared.target_transformer import target_transformer
 
 # from .eval_regression import ModelReport, ModelReportBuilder
 
-# a frunction that returns an esimator, that is a full ds-model
-ModelConstructor = Callable[[None], BaseEstimator]
-PreprocessorConstructor = Callable[[None], TransformerMixin]
-
 
 @dataclass
-class TrainValidateData:
+class EvaluationSet:
     train_features: pl.DataFrame
     train_targets: np.ndarray
     test_features: pl.DataFrame
@@ -49,29 +45,29 @@ def split_train_test(df: pl.DataFrame, /):
         set(test_data_df["id"]) | set(train_data_df["id"])
     ), "train-test-split must cover all ids"
 
-    return TrainValidateData(
+    return EvaluationSet(
         train_features=train_data_df.drop("id", "saleprice"),
-        train_targets=train_data_df.get_column("saleprice"),
+        train_targets=train_data_df.get_column("saleprice").to_numpy(),
         test_features=test_data_df.drop("id", "saleprice"),
-        test_targets=test_data_df.get_column("saleprice"),
+        test_targets=test_data_df.get_column("saleprice").to_numpy(),
     )
 
 
 @dataclass
 class TrainInputInterface:
-    preprocessor: preproc_interface.DefaultPreProcessor
-    targettransformer: target_transformer.TargetTransformer
+    preprocessor: preproc_interface.PreProcInterface
+    target: target_interface.TargetInterface
     estimator: estimator_interface.EstimatorInterface
     # target_transformer: target_transformer.TargetTransformer | None = None
 
 
 def evaluate_estimator(
     train_interface: TrainInputInterface,
-    data: TrainValidateData,
+    data: EvaluationSet,
 ) -> dict[str, float]:
     preproc = get_model.preprocessor_from_type(train_interface.preprocessor)
     _estimator = get_model.model_from_type(train_interface.estimator)
-    _tt = train_interface.targettransformer
+    _tt = get_model.target_from_type(train_interface.target)
     preproc.fit(data.train_features, _tt.func(data.train_targets))
 
     _estimator.fit(
@@ -91,88 +87,9 @@ def evaluate_estimator(
         "rmse": round(
             metrics.root_mean_squared_error(data.test_targets, predictions), 3
         ),
+        "mean_error": round(np.mean(predictions - data.test_targets)),
+        "median_error": round(np.median(predictions - data.test_targets)),
     }
-
-
-def create_knn(preprocessor: PreprocessorConstructor = None, **kwargs) -> Pipeline:
-    if not preprocessor:
-        preprocessor = create_preprocessor_ohe
-
-    return Pipeline(
-        steps=[
-            ("preprocessor", preprocessor()),
-            ("model", KNeighborsRegressor(**kwargs)),
-        ]
-    )
-
-
-def create_lasso(preprocessor: PreprocessorConstructor = None) -> Pipeline:
-    if not preprocessor:
-        preprocessor = create_preprocessor_ohe
-
-    return Pipeline(
-        steps=[("preprocessor", preprocessor()), ("model", Lasso(tol=1e-3))]
-    )
-
-
-# def error_by_actual_price(
-#     features: pl.DataFrame,
-#     targets: pl.DataFrame,
-#     model: BaseEstimator,
-#     kfold: KFold,
-#     error_measure: Callable = None,
-# ) -> pd.DataFrame:
-#     """get table with prediction error by actual price"""
-
-#     def mean_absolute_error(y_test, y_pred):
-#         return np.abs(y_test - y_pred)
-
-#     if not error_measure:
-#         error_measure = mean_absolute_error
-#     train_index, test_index = next(kfold.split(features))
-#     train_index, test_index = pl.Series(train_index), pl.Series(test_index)
-
-#     # evaluate model
-#     X_train, X_test = features.filter(train_index), features.filter(test_index)
-#     y_train, y_test = targets.filter(train_index), targets.filter(test_index)
-
-#     model.fit(X_train, y_train)
-#     y_pred = model.predict(X_test)
-
-#     eval_df = pd.DataFrame(
-#         {
-#             "price": y_test,
-#             "pred_price": y_pred.round(),
-#             "error_pred": error_measure(y_test, y_pred).round(),
-#         }
-#     )
-
-#     return (
-#         eval_df.groupby(pd.cut(x=eval_df["price"] / 1_000, bins=range(0, 650, 20)))
-#         .agg(
-#             error_pred=("error_pred", "mean"),
-#             std_pred=("error_pred", "std"),
-#             count=("error_pred", "count"),
-#         )
-#         .round(0)
-#         .astype("Int64")
-#         .loc[lambda x: x["count"] > 0]
-#     )
-
-
-# @dataclass
-# class EvaluationSet:
-#     features: pd.DataFrame
-#     labels: pd.Series
-#     model_constructor: ModelConstructor
-
-
-# def evaluate_multiple_models(k_fold: KFold, /, *args) -> Iterable[ModelReport]:
-#     for eval_set in args:
-#         report = ModelReportBuilder(
-#             eval_set.features, eval_set.labels, eval_set.model_constructor(), k_fold
-#         )
-#         yield report
 
 
 # read data
@@ -223,7 +140,7 @@ if __name__ == "__main__":
     )
 
     output = []
-    for i in range(30):
+    for i in range(20):
         train_validation_df = split_train_test(data_df)
 
         runs = [
@@ -232,11 +149,11 @@ if __name__ == "__main__":
             #     num_columns_only,
             #     preproc_interface.CategoricalProcessor.ONE_HOT_ENCODER,
             # ),
-            (
-                "basic_columns",
-                basic_columns,
-                preproc_interface.CategoricalProcessor.ONE_HOT_ENCODER,
-            ),
+            # (
+            #     "basic_columns",
+            #     basic_columns,
+            #     preproc_interface.CategoricalProcessor.ONE_HOT_ENCODER,
+            # ),
             (
                 "basic_columns",
                 basic_columns,
@@ -251,38 +168,39 @@ if __name__ == "__main__":
 
         for name, _basic_columns, proc_type in runs:
             for tt in (
-                target_transformer.LnTransformer(),
-                # target_transformer.DummyTransformer(),
+                target_interface.DummyTransformer(),
+                target_interface.PowerTransformer(l=1.5),
+                target_interface.PowerTransformer(l=0.5),
+                target_interface.LogTransformer(),
             ):
                 for est in (
                     estimator_interface.XGBoostRegressor(),
-                    estimator_interface.LinearRegression(),
-                    estimator_interface.KNeighborsRegressor(),
+                    # estimator_interface.LinearRegression(),
+                    # estimator_interface.LGBMRegressor(),
                 ):
                     train_interface = TrainInputInterface(
-                        preprocessor=preproc_interface.DefaultPreProcessor(
+                        preprocessor=preproc_interface.PreProcInterface(
                             basic_columns=_basic_columns,
                             categorical_processor_type=proc_type,
                         ),
-                        targettransformer=tt,
+                        target=tt,
                         estimator=est,
                     )
                     eval_metrics = evaluate_estimator(
                         train_interface=train_interface,
                         data=train_validation_df,
                     )
-                    match tt:
-                        case target_transformer.DummyTransformer():
-                            tt_name = "Dummy"
-                        case target_transformer.LnTransformer():
-                            tt_name = "Log"
 
                     output += [
                         {
                             # "name": name,
                             "estimator": est.estimator_type,
                             "type": proc_type.value,
-                            "target_transformer": tt_name,
+                            "target_transformer": (
+                                tt.target_type
+                                if not isinstance(tt, target_interface.PowerTransformer)
+                                else f"{tt.target_type}({tt.l})"
+                            ),
                             **eval_metrics,
                         }
                     ]
@@ -293,16 +211,17 @@ if __name__ == "__main__":
         .agg(
             [
                 pl.mean("mape").round(3).alias("avg_mape"),
-                pl.std("mape").round(4).alias("std_mape"),
+                pl.mean("mean_error").cast(pl.Int32).alias("mean_error"),
+                pl.mean("median_error").cast(pl.Int32).alias("median_error"),
                 pl.mean("mae").cast(pl.Int32).alias("avg_mae"),
                 pl.std("mae").cast(pl.Int32).alias("std_mae"),
             ]
         )
         .sort("avg_mape")
     )
-    print(_df)
+    print(_df.to_pandas())
 
-    log_transformer = target_transformer.LnTransformer()
+    log_transformer = target_transformer.LogTransformer()
     _log_targets_df = log_transformer.transform(targets_df["saleprice"].to_numpy())
 
     # where

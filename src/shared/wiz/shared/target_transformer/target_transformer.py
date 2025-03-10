@@ -1,7 +1,7 @@
 import abc
 import enum
 from typing import Generic, ParamSpec, TypeVar, final
-
+from wiz.interface import target_interface
 import numpy as np
 
 
@@ -28,7 +28,7 @@ class TargetTransformer(abc.ABC, Generic[Target]):
         return self.func(target)
 
 
-class LnTransformer(TargetTransformer[np.ndarray]):
+class LogTransformer(TargetTransformer[np.ndarray]):
 
     def func(self, target: np.ndarray) -> np.ndarray:
         return np.log(np.clip(target, EPSILON, LARGE))
@@ -39,17 +39,17 @@ class LnTransformer(TargetTransformer[np.ndarray]):
 
 class PowerTransformer(TargetTransformer[np.ndarray]):
 
-    def __init__(self, l: float):
+    def __init__(self, interface: target_interface.PowerTransformer):
         super().__init__()
-        self.l = l
+        self.l = interface.l
 
     def func(self, target: np.ndarray) -> np.ndarray:
-        if self.l > 0:
+        if self.l > 3:
             target = np.clip(target, 0, LARGE_EXP)
         return np.power(target, self.l)
 
     def inv_func(self, target: np.ndarray) -> np.ndarray:
-        if 1 / self.l > 0:
+        if 1 / self.l > 3:
             target = np.clip(target, 0, LARGE_EXP)
         return np.power(target, 1 / self.l)
 

@@ -30,7 +30,7 @@ class PreProcessor(abc.ABC):
 
 class DefaultPreProcessor(PreProcessor):
 
-    def __init__(self, interface: preproc_interface.DefaultPreProcessor, /):
+    def __init__(self, interface: preproc_interface.PreProcInterface, /):
         super().__init__()
         self.pipeline = self.construct_pipeline(
             numerical_columns=interface.basic_columns.numerical_columns,
