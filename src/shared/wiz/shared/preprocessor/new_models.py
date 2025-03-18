@@ -1,16 +1,13 @@
-from collections.abc import Sequence
-from dataclasses import dataclass
-import abc
-import enum
 import pathlib
-import math
 from functools import partial
-from typing import Callable, Generic, Iterable, ParamSpec, Self, TypeVar, final
 import json
 import numpy as np
-import pydantic
-from sklearn import pipeline
-from wiz.interface import estimator_interface, preproc_interface, target_interface
+from wiz.interface import (
+    estimator_interface,
+    preproc_interface,
+    target_interface,
+    modeling_interface,
+)
 from wiz.shared import get_model
 import xgboost
 from toolz.itertoolz import pluck
@@ -23,73 +20,9 @@ from sklearn.model_selection import KFold
 from wiz.shared.estimator import estimator
 from wiz.shared.preprocessor import preprocessor
 from wiz.shared.target_transformer import target_transformer
+from wiz.evaluation import helpers2 as helpers
 
 # from .eval_regression import ModelReport, ModelReportBuilder
-
-
-@dataclass
-class EvaluationSet:
-    train_features: pl.DataFrame
-    train_targets: np.ndarray
-    test_features: pl.DataFrame
-    test_targets: np.ndarray
-
-
-def split_train_test(df: pl.DataFrame, /):
-
-    test_data_df = df.sample(n=len(df) * 0.2)
-    train_data_df = df.join(test_data_df, on="id", how="anti")
-
-    assert len(set(df["id"])) == len(df["id"]), "id must be unique"
-    assert not set(df["id"]) - (
-        set(test_data_df["id"]) | set(train_data_df["id"])
-    ), "train-test-split must cover all ids"
-
-    return EvaluationSet(
-        train_features=train_data_df.drop("id", "saleprice"),
-        train_targets=train_data_df.get_column("saleprice").to_numpy(),
-        test_features=test_data_df.drop("id", "saleprice"),
-        test_targets=test_data_df.get_column("saleprice").to_numpy(),
-    )
-
-
-@dataclass
-class TrainInputInterface:
-    preprocessor: preproc_interface.PreProcInterface
-    target: target_interface.TargetInterface
-    estimator: estimator_interface.EstimatorInterface
-    # target_transformer: target_transformer.TargetTransformer | None = None
-
-
-def evaluate_estimator(
-    train_interface: TrainInputInterface,
-    data: EvaluationSet,
-) -> dict[str, float]:
-    preproc = get_model.preprocessor_from_type(train_interface.preprocessor)
-    _estimator = get_model.model_from_type(train_interface.estimator)
-    _tt = get_model.target_from_type(train_interface.target)
-    preproc.fit(data.train_features, _tt.func(data.train_targets))
-
-    _estimator.fit(
-        preproc.transform(data.train_features).to_numpy(), _tt.func(data.train_targets)
-    )
-    tt_predictions = _estimator.predict(
-        preproc.transform(data.test_features).to_numpy()
-    )
-    predictions = _tt.inv_func(tt_predictions)
-
-    return {
-        "mape": round(
-            metrics.mean_absolute_percentage_error(data.test_targets, predictions),
-            3,
-        ),
-        "mae": round(metrics.mean_absolute_error(data.test_targets, predictions)),
-        "rmse": round(
-            metrics.root_mean_squared_error(data.test_targets, predictions), 3
-        ),
-        "mean_error": round(np.mean(predictions - data.test_targets)),
-        "median_error": round(np.median(predictions - data.test_targets)),
-    }
 
 
 # read data
@@ -133,15 +66,17 @@ if __name__ == "__main__":
     basic_columns = preproc_interface.BasicColumns(
         numerical_columns=_data_df.select(pl.selectors.numeric()).columns,
         categorical_columns=_data_df.select(pl.selectors.string()).columns,
+        target_column="saleprice",
     )
     num_columns_only = preproc_interface.BasicColumns(
         numerical_columns=_data_df.select(pl.selectors.numeric()).columns,
         categorical_columns=[],
+        target_column="saleprice",
     )
 
     output = []
     for i in range(30):
-        train_validation_df = split_train_test(data_df)
+        train_validation_df = helpers.split_train_test(data_df)
 
         runs = [
             # (
@@ -178,7 +113,7 @@ if __name__ == "__main__":
                     # estimator_interface.LinearRegression(),
                     # estimator_interface.LGBMRegressor(),
                 ):
-                    train_interface = TrainInputInterface(
+                    train_interface = modeling_interface.TrainInputInterface(
                         preprocessor=preproc_interface.PreProcInterface(
                             basic_columns=_basic_columns,
                             categorical_processor_type=proc_type,
@@ -186,8 +121,8 @@ if __name__ == "__main__":
                         target=tt,
                         estimator=est,
                     )
-                    eval_metrics = evaluate_estimator(
-                        train_interface=train_interface,
+                    eval_metrics = helpers.evaluate_estimator(
+                        interface=train_interface,
                         data=train_validation_df,
                     )
 

@@ -18,6 +18,7 @@ class OutputType(enum.StrEnum):
 class BasicColumns(pydantic.BaseModel):
     numerical_columns: Sequence[str]
     categorical_columns: Sequence[str]
+    target_column: str
 
 
 class PreProcInterface(pydantic.BaseModel):
