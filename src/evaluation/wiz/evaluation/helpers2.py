@@ -1,6 +1,9 @@
+from collections.abc import Sequence
 import dataclasses
+from typing import NamedTuple
 import polars as pl
 import numpy as np
+import pydantic
 from sklearn import metrics
 from wiz.shared import get_model
 from wiz.interface import modeling_interface
@@ -10,6 +13,11 @@ from wiz.interface import modeling_interface
 class EvaluationSet:
     train_dataset: pl.DataFrame
     infer_dataset: pl.DataFrame
+
+
+class PredictionSet(pydantic.BaseModel):
+    prediction: float
+    target: float
 
 
 def split_train_test(df: pl.DataFrame, /):
@@ -32,6 +40,25 @@ def evaluate_estimator(
     interface: modeling_interface.TrainInputInterface,
     data: EvaluationSet,
 ) -> dict[str, float]:
+    prediction_sets = get_predictions(interface, data)
+    targets = np.array([p.target for p in prediction_sets])
+    predictions = np.array([p.prediction for p in prediction_sets])
+    return {
+        "mape": round(
+            metrics.mean_absolute_percentage_error(targets, predictions),
+            3,
+        ),
+        "mae": round(metrics.mean_absolute_error(targets, predictions)),
+        "rmse": round(metrics.root_mean_squared_error(targets, predictions), 3),
+        "mean_error": round(np.mean(predictions - targets)),
+        "median_error": round(np.median(predictions - targets)),
+    }
+
+
+def get_predictions(
+    interface: modeling_interface.TrainInputInterface,
+    data: EvaluationSet,
+) -> Sequence[PredictionSet]:
     preproc = get_model.preprocessor_from_type(interface.preprocessor)
     _estimator = get_model.model_from_type(interface.estimator)
     _tt = get_model.target_from_type(interface.target)
@@ -48,14 +75,7 @@ def evaluate_estimator(
         preproc.transform(data.infer_dataset).to_numpy()
     )
     predictions = _tt.inv_func(tt_predictions)
-
-    return {
-        "mape": round(
-            metrics.mean_absolute_percentage_error(_target_infer, predictions),
-            3,
-        ),
-        "mae": round(metrics.mean_absolute_error(_target_infer, predictions)),
-        "rmse": round(metrics.root_mean_squared_error(_target_infer, predictions), 3),
-        "mean_error": round(np.mean(predictions - _target_infer)),
-        "median_error": round(np.median(predictions - _target_infer)),
-    }
+    return [
+        PredictionSet(target=t, prediction=p)
+        for t, p in zip(_target_infer, predictions)
+    ]

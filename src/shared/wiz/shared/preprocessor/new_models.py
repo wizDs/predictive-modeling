@@ -75,7 +75,8 @@ if __name__ == "__main__":
     )
 
     output = []
-    for i in range(30):
+    prediction_datasets = []
+    for i in range(20):
         train_validation_df = helpers.split_train_test(data_df)
 
         runs = [
@@ -121,6 +122,30 @@ if __name__ == "__main__":
                         target=tt,
                         estimator=est,
                     )
+                    prediction_set = helpers.get_predictions(
+                        interface=train_interface,
+                        data=train_validation_df,
+                    )
+                    prediction_dataset = pl.DataFrame(prediction_set).with_columns(
+                        [
+                            (pl.col("prediction") - pl.col("target")).alias("error"),
+                            pl.lit(est.estimator_type).alias("estimator"),
+                            pl.lit(proc_type.value).alias("type"),
+                            pl.lit(
+                                tt.target_type
+                                if not isinstance(tt, target_interface.PowerTransformer)
+                                else f"{tt.target_type}({tt.l})"
+                            ).alias("target_transformer"),
+                            pl.col("target")
+                            .qcut(
+                                quantiles=np.arange(0.1, 1.1, 0.1),
+                                labels=list(map(str, range(1, 12, 1))),
+                            )
+                            .cast(pl.Int8())
+                            .alias("target_grp"),
+                        ]
+                    )
+                    prediction_datasets += [prediction_dataset]
                     eval_metrics = helpers.evaluate_estimator(
                         interface=train_interface,
                         data=train_validation_df,
@@ -140,6 +165,27 @@ if __name__ == "__main__":
                         }
                     ]
 
+    _prediction_datasets: pl.DataFrame = (
+        pl.concat(prediction_datasets)
+        .group_by(
+            [
+                "estimator",
+                "type",
+                "target_transformer",
+                pl.col("target_grp").cut(breaks=[-1, 3, 9, 10]),
+            ]
+        )
+        .agg(pl.mean("error"))
+        .pivot(
+            on="target_grp",
+            index=[
+                "estimator",
+                "type",
+                "target_transformer",
+            ],
+            values="error",
+        )
+    )
     _df = (
         pl.DataFrame(output)
         .group_by(["estimator", "type", "target_transformer"])

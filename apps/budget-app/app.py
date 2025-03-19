@@ -134,6 +134,7 @@ if st.button("Submit"):
                 )
             )
             .with_columns(saldo=payment_interface.saldo + pl.col("delta").cum_sum())
+            .with_columns(date=pl.col("date").cast(dtype=pl.Utf8()))
         )
         st.write(df)
 
