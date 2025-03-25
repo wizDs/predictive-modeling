@@ -1,10 +1,10 @@
 import lightgbm as lgb
 import numpy as np
-from .estimator import BinaryClassifier, Regressor
+from wiz.shared.estimator import estimator
 from wiz.interface import estimator_interface
 
 
-class LGBMClassifier(BinaryClassifier):
+class LGBMClassifier(estimator.BinaryClassifier):
 
     def __init__(self, estimator: estimator_interface.LGBMClassifier, /) -> None:
         super().__init__()
@@ -23,7 +23,7 @@ class LGBMClassifier(BinaryClassifier):
         return None  # self.clf_booster.get_score(importance_type="gain")
 
 
-class LGBMRegressor(Regressor):
+class LGBMRegressor(estimator.Regressor):
 
     def __init__(self, estimator: estimator_interface.LGBMRegressor, /) -> None:
         super().__init__()

@@ -186,6 +186,7 @@ if __name__ == "__main__":
             values="error",
         )
     )
+    print(_prediction_datasets)
     _df = (
         pl.DataFrame(output)
         .group_by(["estimator", "type", "target_transformer"])
