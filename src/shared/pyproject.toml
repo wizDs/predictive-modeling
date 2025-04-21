@@ -1,0 +1,33 @@
+[tool.poetry]
+name = "shared"
+version = "0.1.0"
+description = ""
+authors = ["wiz <wilsonzhou92@gmail.com>"]
+readme = "README.md"
+packages = [
+    { include = "wiz/shared" },
+]
+
+[tool.poetry.dependencies]
+evaluation = { path = "../evaluation", develop = true }
+interface = { path = "../interface", develop = true }
+python = "^3.13"
+ipykernel = "^6.29.5"
+xgboost = "^2.1.4"
+scikit-learn = "^1.6.1"
+toolz = "^1.0.0"
+polars = "^1.24.0"
+pyarrow = "^19.0.1"
+pandas = "^2.2.3"
+lightgbm = "^4.6.0"
+torch = "^2.6.0"
+matplotlib = "^3.10.1"
+
+
+[tool.poetry.group.dev.dependencies]
+mypy = "^1.15.0"
+pytest = "^8.3.4"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
