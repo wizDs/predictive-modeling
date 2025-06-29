@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "revolut-calculations"
+version = "0.1.0"
+description = ""
+authors = ["wiz <wilsonzhou92@gmail.com>"]
+readme = "README.md"
+packages = [
+    { include="wiz/revolut-calculations" }, 
+]
+
+[tool.poetry.dependencies]
+python = "^3.13"
+polars = "^1.20.0"
+pandas = "^2.2.3"
+
+
+[tool.poetry.group.dev.dependencies]
+mypy = "^1.16.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
