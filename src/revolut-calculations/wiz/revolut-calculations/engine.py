@@ -36,8 +36,8 @@ def calculate_monthly_revolut_interest(
     *,
     amount: float,
     interest_rate: float,
-    monthly_cost: float,
     interest_type: InterestType = InterestType.ANNUAL,
+    monthly_cost: float = 0.0,
 ) -> float:
     match interest_type:
         case InterestType.ANNUAL:
@@ -69,18 +69,18 @@ if __name__ == "__main__":
     )
     print(
         calculate_monthly_revolut_interest(
-            amount=150_000,
-            interest_rate=3,
-            monthly_cost=RevolutPackage.STANDARD.cost,
+            amount=100_000,
+            interest_rate=1.23,
             interest_type=InterestType.ANNUAL,
+            monthly_cost=RevolutPackage.STANDARD.cost,
         )
     )
     print(
         calculate_monthly_revolut_interest(
-            amount=150_000,
-            interest_rate=3.5,
-            monthly_cost=RevolutPackage.PREMIUM.cost,
+            amount=100_000,
+            interest_rate=1.83,
             interest_type=InterestType.ANNUAL,
+            monthly_cost=RevolutPackage.PREMIUM.cost,
         )
     )
 
@@ -88,8 +88,8 @@ if __name__ == "__main__":
         *,
         amount: float,
         interest_rate: float,
-        monthly_cost: float,
         interest_type: InterestType = InterestType.ANNUAL,
+        monthly_cost: float,
         n: int = 12,
         period: int = 1,
     ) -> float:
