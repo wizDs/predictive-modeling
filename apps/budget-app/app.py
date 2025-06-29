@@ -1,5 +1,8 @@
+from operator import attrgetter
 import os
 import datetime
+import uuid
+import dateutil
 import pydantic
 import polars as pl
 import streamlit as st
@@ -10,7 +13,8 @@ load_dotenv()
 
 SHEET_ID = os.environ["SHEET_ID"]
 API_KEY = os.environ["API_KEY"]
-TABLE_NAME = "Fixed & variable costs"
+COST_TABLE_NAME = "Fixed & variable costs"
+INCOME_TABLE_NAME = "Indkomst"
 
 
 def load_expected_payments_to_polars(
@@ -21,7 +25,13 @@ def load_expected_payments_to_polars(
     api_key: str,
 ) -> pl.DataFrame:
     eval_date = interface.rundate or datetime.date.today()
-    payments = data_loader.get_google_sheet_data(google_sheet_id, table_name, api_key)
+    payments = data_loader.get_payment_data(
+        spreadsheet_id=google_sheet_id,
+        sheet_name=table_name,
+        api_key=api_key,
+        column_start="A",
+        column_end="I",
+    )
     return pl.DataFrame(
         payment.calculate_total_payments(
             eval_date=eval_date,
@@ -32,7 +42,24 @@ def load_expected_payments_to_polars(
     )
 
 
-def collect_payment_interface_inputs() -> payment.PaymentInterface:
+def load_expected_income_to_polars(
+    *,
+    interface: schemas.PaymentInterface,
+    google_sheet_id: str,
+    table_name: str,
+    api_key: str,
+) -> pl.DataFrame:
+    income_data = data_loader.get_income_data(
+        spreadsheet_id=google_sheet_id,
+        sheet_name=table_name,
+        api_key=api_key,
+        column_start="B",
+        column_end="D",
+    )
+    return income_data
+
+
+def collect_payment_interface_inputs() -> schemas.PaymentInterface:
     # Streamlit App
     st.title("💰 Payment Interface App")
     with st.container():
@@ -42,6 +69,7 @@ def collect_payment_interface_inputs() -> payment.PaymentInterface:
             saldo = st.number_input(
                 "💰 Current Balance (Saldo)", value=30_000.0, step=1_000.0
             )
+
         with col2:
             monthly_salary = st.number_input(
                 "💵 Monthly Salary", value=44_000.0, step=1_000.0
@@ -67,49 +95,61 @@ def collect_payment_interface_inputs() -> payment.PaymentInterface:
     for i in range(num_projects):
         col1, col2, col3 = st.columns([2, 1, 1])
         with col1:
-            name = st.text_input(f"Project {i+1} Name", key=f"name_{i}")
+            _ = st.text_input(f"Project {i+1} Name", key=f"name_{i}")
         with col2:
             amount = st.number_input(
-                f"Project {i+1} Amount", value=10_000.0, step=1000.0, key=f"amount_{i}"
+                f"Project {i+1} Amount",
+                value=10_000.0,
+                step=1000.0,
+                key=str(uuid.uuid4().hex),
             )
         with col3:
-            due_date = st.date_input(f"Project {i+1} Due Date", key=f"date_{i}")
-        if amount:
-            planned_projects.append(
-                schemas.Record(description=name, price=amount, due_date=due_date)
-            )
-
-        # Submit Button
-        if st.button("Submit"):
-            try:
-                # Validate using Pydantic
-                payment_interface = schemas.PaymentInterface(
-                    saldo=saldo,
-                    monthly_salary=monthly_salary,
-                    additional_cost=additional_cost,
-                    planned_projects=planned_projects,
-                    periods=periods,
-                    rundate=rundate,
+            due_date = st.date_input(
+                f"Project {i+1} Due Date",
+                value=datetime.date(
+                    year=datetime.date.today().year,
+                    month=datetime.date.today().month,
+                    day=1,
                 )
-                st.success("✅ Payment Data Successfully loaded!")
-                return payment_interface
+                + dateutil.relativedelta.relativedelta(months=i + 1),
+                key=str(uuid.uuid4().hex),
+            )
+        if amount:
+            planned_projects.append(schemas.Record(amount=amount, date=due_date))
 
-            except pydantic.ValidationError as e:
-                st.error("❌ Validation Error!")
-                st.text(e)
+    # Submit Button
+    if st.button("Submit", key="submit_button"):
+        try:
+            # Validate using Pydantic
+            payment_interface = schemas.PaymentInterface(
+                saldo=saldo,
+                monthly_salary=monthly_salary,
+                additional_cost=additional_cost,
+                planned_projects=planned_projects,
+                periods=periods,
+                rundate=rundate,
+            )
+            st.success("✅ Payment Data Successfully loaded!")
+            return payment_interface
+
+        except pydantic.ValidationError as e:
+            st.error("❌ Validation Error!")
+            st.text(e)
+            return None
 
 
 def main() -> None:
     interface = collect_payment_interface_inputs()
-    calculate(interface)
+    if interface:
+        calculate(interface)
 
 
-def calculate(payment_interface: payment.PaymentInterface) -> None:
+def calculate(payment_interface: schemas.PaymentInterface) -> None:
 
     total_payments_df = load_expected_payments_to_polars(
         interface=payment_interface,
         google_sheet_id=SHEET_ID,
-        table_name=TABLE_NAME,
+        table_name=COST_TABLE_NAME,
         api_key=API_KEY,
     )
 

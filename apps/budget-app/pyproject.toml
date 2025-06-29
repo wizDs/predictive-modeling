@@ -12,6 +12,9 @@ python = "^3.13"
 streamlit = "^1.42.0"
 python-dotenv = "^1.0.1"
 watchdog = "^6.0.0"
+ipykernel = "^6.29.5"
+statsmodels = "^0.14.4"
+patsy = "^1.0.1"
 
 [build-system]
 requires = ["poetry-core"]

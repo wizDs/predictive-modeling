@@ -1,6 +1,7 @@
 import datetime
 import enum
-from typing import Literal, NamedTuple, Optional, Sequence, assert_never
+from typing import Literal, Optional, assert_never
+from collections.abc import Sequence
 import pydantic
 from dateutil import relativedelta
 
@@ -96,13 +97,13 @@ class Payment(pydantic.BaseModel):
 
 
 class Record(pydantic.BaseModel):
-    description: Optional[str] = None
-    due_date: datetime.date
-    price: float
+    date: datetime.date
+    amount: float
 
 
-# class ExpectedSalaryRecords(pydantic.BaseModel):
-#     records: Sequence[Record]
+class ExpectedSalaryRecords(pydantic.BaseModel):
+    records: Sequence[Record]
+
 
 #     def monthly_salary_stream(self, periods: int) -> Sequence[float]:
 #         ordered_records = sorted(self.records, key=attrgetter("date"))
@@ -128,7 +129,7 @@ class Record(pydantic.BaseModel):
 
 class PaymentInterface(pydantic.BaseModel):
     saldo: float
-    monthly_salary: float  # | ExpectedSalaryRecords[Record]
+    monthly_salary: float | Sequence[Record]
     additional_cost: float
     planned_projects: Sequence[Record]
     periods: int
