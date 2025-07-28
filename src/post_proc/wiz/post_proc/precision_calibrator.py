@@ -76,8 +76,6 @@ if __name__ == "__main__":
     y_pred = clf.predict(X_test)
     y_pred_proba = clf.predict_proba(X_test)
 
-    y_true = np.array([0, 0, 1, 1])
-    y_scores = np.array([0.1, 0.4, 0.35, 0.8])
     precision, recall, thresholds = metrics.precision_recall_curve(
         y_test, y_pred_proba[:, 1], pos_label=1
     )
