@@ -114,14 +114,7 @@ if __name__ == "__main__":
         )
     )
 
-    print(
-        dict(
-            zip(
-                precision_recall_curve_df["precision"],
-                precision_recall_curve_df["point"],
-            )
-        )
-    )
+    print(precision_recall_curve_df.to_dict(key="precision", value="point"))
     print(precision_recall_curve[-10:])
     print(precision_recall_curve_df)
     print(precision_recall_curve_df.shape)
