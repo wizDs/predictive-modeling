@@ -12,6 +12,9 @@ packages = [
 python = "^3.13"
 interface = {path = "../interface"}
 shared = {path = "../shared"}
+scikit-learn = "^1.7.1"
+matplotlib = "^3.10.3"
+polars = "^1.31.0"
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^1.15.0"

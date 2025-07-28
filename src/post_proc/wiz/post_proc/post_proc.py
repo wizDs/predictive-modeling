@@ -1,7 +1,8 @@
 import abc
+import numpy as np
 
-from wiz.shared.estimator.estimator import FeatureArray  # type: ignore[import-untyped]
-from wiz.shared.estimator.estimator import DoubleArray  # type: ignore[import-untyped]
+DoubleArray = np.ndarray[tuple[np.float64], np.dtype[np.float64]]
+FeatureArray = np.ndarray[tuple[np.float64], np.dtype[np.float64]]
 
 
 class PostProc(abc.ABC):
