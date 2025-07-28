@@ -2,6 +2,8 @@ import xgboost
 import numpy as np
 from .estimator import BinaryClassifier, Regressor
 from wiz.interface import estimator_interface
+from wiz.interface.feature_array import FeatureArray
+from typing import Mapping
 
 
 class XGBoostClassifier(BinaryClassifier):
@@ -19,9 +21,12 @@ class XGBoostClassifier(BinaryClassifier):
     def _predict(self, features: np.ndarray) -> np.ndarray:
         return self.clf.predict(features)
 
-    def feature_importance(self):
+    def feature_importance(self, features: FeatureArray) -> Mapping[str, float]:
         # https://stackoverflow.com/questions/37627923/how-to-get-feature-importance-in-xgboost
         return self.clf_booster.get_score(importance_type="gain")
+
+    def predict_proba(self, features: FeatureArray) -> np.ndarray:
+        return self.clf.predict_proba(features)
 
 
 class XGBoostRegressor(Regressor):

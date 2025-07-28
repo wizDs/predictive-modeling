@@ -25,7 +25,7 @@ class BaseEstimator(abc.ABC):
         return self._predict(features)
 
     @abc.abstractmethod
-    def feature_importance(self, features: FeatureArray) -> Mapping[str, float]:
+    def feature_importance(self, features: FeatureArray) -> Mapping[str, float] | None:
         """Predict outputs for input data X."""
 
 

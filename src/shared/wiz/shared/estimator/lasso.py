@@ -2,6 +2,8 @@ from sklearn import linear_model
 import numpy as np
 from .estimator import Regressor
 from wiz.interface import estimator_interface
+from wiz.interface.feature_array import FeatureArray
+from typing import Mapping
 
 
 class LassoModel(Regressor):
@@ -18,5 +20,5 @@ class LassoModel(Regressor):
     def _predict(self, features: np.ndarray) -> np.ndarray:
         return self.clf.predict(features)
 
-    def feature_importance(self):
+    def feature_importance(self, features: FeatureArray) -> Mapping[str, float]:
         return None  # self.clf.intercept_, self.clf.coef_[0]

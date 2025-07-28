@@ -4,7 +4,7 @@ import abc
 import polars as pl
 import pydantic
 from wiz.interface import preproc_interface
-from sklearn import compose, preprocessing, pipeline, impute
+from sklearn import compose, preprocessing, pipeline, impute  # type: ignore[import-untyped]
 
 OUTPUT_TYPE = preproc_interface.OutputType.POLARS
 

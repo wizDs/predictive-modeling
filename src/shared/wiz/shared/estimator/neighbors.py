@@ -1,7 +1,10 @@
 from sklearn import neighbors
 import numpy as np
-from .estimator import Regressor
+from wiz.shared.estimator import Regressor
 from wiz.interface import estimator_interface
+from wiz.interface.feature_array import FeatureArray
+from typing import Mapping
+from wiz.interface.feature_array import DoubleArray
 
 
 class KNeighborsRegressor(Regressor):
@@ -18,5 +21,8 @@ class KNeighborsRegressor(Regressor):
     def _predict(self, features: np.ndarray) -> np.ndarray:
         return self.clf.predict(features)
 
-    def feature_importance(self):
+    def predict_proba(self, features: FeatureArray) -> DoubleArray:
+        return self.clf.predict_proba(features)
+
+    def feature_importance(self, features: FeatureArray) -> Mapping[str, float] | None:
         return None  # self.clf.intercept_, self.clf.coef_[0]
