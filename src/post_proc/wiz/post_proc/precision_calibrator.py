@@ -1,5 +1,5 @@
 from typing import TypeAlias
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from sklearn import metrics
 from sklearn import model_selection
 from sklearn import linear_model
@@ -15,15 +15,50 @@ class PrecisionRecallPoint(pydantic.BaseModel):
     threshold: float
 
 
-PrecisionRecallCurve: TypeAlias = Mapping[int, PrecisionRecallPoint]
+PrecisionRecallCurveTransformer: TypeAlias = Mapping[int, PrecisionRecallPoint]
+
+
+class PrecisionRecallCurve(pydantic.BaseModel):
+    precisions: Sequence[int]
+    points: Sequence[PrecisionRecallPoint]
+
+    def to_transformer(self) -> PrecisionRecallCurveTransformer:
+        return {
+            precision: point for precision, point in zip(self.precisions, self.points)
+        }
 
 
 class PrecisionCalibrator(FittablePostProc):
-    def __init__(self):
+    def __init__(self, *, precision_recall_curve: PrecisionRecallCurve | None = None):
         super().__init__()
+        self.precision_recall_curve = precision_recall_curve
+        self.precision_recall_curve_transformer = (
+            precision_recall_curve.to_transformer() if precision_recall_curve else None
+        )
 
     def fit(self, features: FeatureArray, targets: DoubleArray) -> None:
         pass
+
+    def transform(self, predictions: DoubleArray) -> DoubleArray:
+        return np.array(
+            [
+                self.precision_recall_curve_transformer[precision].threshold
+                for precision in predictions
+            ]
+        )
+
+    def transform_sparse(self, predictions: DoubleArray) -> DoubleArray:
+        point_thresholds = np.array(
+            [point.threshold for point in self.precision_recall_curve.points]
+        )
+        return (
+            np.searchsorted(
+                point_thresholds,
+                predictions,
+                side="right",
+            )
+            - 1
+        )
 
 
 if __name__ == "__main__":
@@ -114,7 +149,11 @@ if __name__ == "__main__":
         )
     )
 
-    print(precision_recall_curve_df.to_dict(key="precision", value="point"))
+    print(
+        PrecisionRecallCurve.model_validate(
+            precision_recall_curve_df.to_dict(as_series=False)
+        )
+    )
     print(precision_recall_curve[-10:])
     print(precision_recall_curve_df)
     print(precision_recall_curve_df.shape)
