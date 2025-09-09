@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "post-proc"
+version = "0.1.0"
+description = ""
+authors = ["wiz <wilsonzhou92@gmail.com>"]
+readme = "README.md"
+packages = [
+    { include = "wiz/post_proc" },
+]
+
+[tool.poetry.dependencies]
+python = "^3.13"
+interface = {path = "../interface"}
+shared = {path = "../shared"}
+scikit-learn = "^1.7.1"
+matplotlib = "^3.10.3"
+polars = "^1.31.0"
+
+[tool.poetry.group.dev.dependencies]
+mypy = "^1.15.0"
+pytest = "^8.3.4"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
