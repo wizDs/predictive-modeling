@@ -101,7 +101,7 @@ def collect_payment_interface_inputs() -> schemas.PaymentInterface:
                 f"Project {i+1} Amount",
                 value=10_000.0,
                 step=1000.0,
-                key=str(uuid.uuid4().hex),
+                key=f"project_amount_{i}",
             )
         with col3:
             due_date = st.date_input(
@@ -112,7 +112,7 @@ def collect_payment_interface_inputs() -> schemas.PaymentInterface:
                     day=1,
                 )
                 + dateutil.relativedelta.relativedelta(months=i + 1),
-                key=str(uuid.uuid4().hex),
+                key=f"project_due_date_{i}",
             )
         if amount:
             planned_projects.append(schemas.Record(amount=amount, date=due_date))
@@ -158,7 +158,6 @@ def calculate(payment_interface: schemas.PaymentInterface) -> None:
             iter(payment_interface.planned_projects),
             schema=pl.Schema(
                 {
-                    "description": pl.Utf8,
                     "date": pl.Date,
                     "project_cost": pl.Int64,
                 }
