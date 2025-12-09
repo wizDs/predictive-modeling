@@ -18,6 +18,47 @@ MAX_WORKERS = 4
 _SPOT_FEE_DKK = 0.12
 
 
+class Column(enum.StrEnum):
+    UTC_TIME = "HourUTC"
+    """UTC time"""
+    TIMESTAMP = "timestamp"
+    """copenhagen time"""
+    SPOT_PRICE = "SpotPriceDKK"
+    """Spot price in dkk per kwh can both be hourly or quarter hourly"""
+    HOURLY_PRICE = "price_kwh_in_dkk"
+    """Variable hourly price in dkk per kwh"""
+    FIXED_HOURLY_PRICE = "monthly_price_kwh_in_dkk"
+    """Fixed hourly price for a month in dkk per kwh"""
+    HOURLY_CONSUMPTION = "consumption_kwh_hourly"
+    """Variable hourly consumption in kwh"""
+    HOURLY_TOTAL_COST = "consumption_in_dkk"
+    """total cost of consumption in dkk using variable price"""
+    FIXED_HOURLY_TOTAL_COST = "consumption_in_dkk_status_quo"
+    """total cost of consumption in dkk using fixed monthly price"""
+    MONTHLY_CONSUMPTION = "consumption_kwh_monthly"
+    """Monthly consumption in kwh"""
+    MONTHLY_PRICE_AVG = "avg_monthly_price_kwh_in_dkk"
+    """Avg monthly price in dkk per kwh"""
+    MONTHLY_TOTAL_COST = "consumption_in_dkk_monthly"
+    """total cost of consumption in dkk using variable price"""
+    FIXED_MONTHLY_TOTAL_COST = "consumption_in_dkk_monthly_status_quo"
+    """total cost of consumption in dkk using fixed monthly price"""
+    HOURLY_CONSUMPTION_ROLLING_SUM = "consumption_in_dkk_rolling_sum"
+    """rolling sum of consumption in dkk"""
+    HOURLY_CONSUMPTION_DIFF = "consumption_kwh_hourly_diff"
+    """difference in HOURLY_CONSUMPTION in kwh"""
+
+
+class FeatureColumn(enum.StrEnum):
+    YEAR = "year"
+    MONTH = "month"
+    DAY_OF_MONTH = "day_of_month"
+    HOUR_OF_DAY = "hour_of_day"
+    WEEKDAY = "weekday"
+    EVENT_OF_DAY = "event_of_day"
+    SIGNIFICANT_CONSUMPTION = "significant_consumption"
+
+
 class Frequency(enum.IntEnum):
     HOURLY = 24
     QUARTER_HOURLY = 4 * 24
@@ -190,6 +231,250 @@ class PricesMonthly(pydantic.BaseModel):
     monthly_price_kwh_in_dkk: float
 
 
+def join_prices_and_consumption_data(
+    daily_prices_df: pl.DataFrame,
+    daily_consumption_df: pl.DataFrame,
+    monthly_prices_df: pl.DataFrame | None = None,
+) -> pl.DataFrame:
+    df: pl.DataFrame = (
+        daily_prices_df.drop(Column.SPOT_PRICE)
+        .join(other=daily_consumption_df, on=Column.UTC_TIME, how="left")
+        .with_columns(
+            pl.col(Column.UTC_TIME)
+            .dt.convert_time_zone("Europe/Copenhagen")
+            .alias(Column.TIMESTAMP)
+        )
+        # .filter(pl.col("timestamp").dt.year() >= 2024)
+        .with_columns(
+            pl.col(Column.TIMESTAMP).dt.hour().alias(FeatureColumn.HOUR_OF_DAY)
+        )
+        .with_columns(
+            pl.col(Column.TIMESTAMP).dt.day().alias(FeatureColumn.DAY_OF_MONTH)
+        )
+        .with_columns(pl.col(Column.TIMESTAMP).dt.month().alias(FeatureColumn.MONTH))
+        .with_columns(pl.col(Column.TIMESTAMP).dt.year().alias(FeatureColumn.YEAR))
+        .with_columns(
+            pl.col(Column.TIMESTAMP).dt.weekday().alias(FeatureColumn.WEEKDAY)
+        )
+        .with_columns(
+            event_of_day=pl.when(
+                pl.col(FeatureColumn.HOUR_OF_DAY).is_between(6, 10, closed="left")
+            )
+            .then(pl.lit("Morning"))  # 0
+            .when(pl.col(FeatureColumn.HOUR_OF_DAY).is_between(10, 18, closed="left"))
+            .then(pl.lit("Afternoon"))  # 1
+            .when(pl.col(FeatureColumn.HOUR_OF_DAY).is_between(18, 22, closed="left"))
+            .then(pl.lit("Evening"))  # 2
+            .when(
+                pl.col(FeatureColumn.HOUR_OF_DAY).is_between(22, 24, closed="both")
+                | pl.col(FeatureColumn.HOUR_OF_DAY).is_between(0, 6, closed="left")
+            )
+            .then(pl.lit("Night"))  # 3
+            .otherwise(-99)
+        )
+        .with_columns(
+            (pl.col(Column.HOURLY_PRICE) * pl.col(Column.HOURLY_CONSUMPTION)).alias(
+                Column.HOURLY_TOTAL_COST
+            )
+        )
+        .with_columns(
+            pl.col(Column.HOURLY_PRICE).diff().alias(Column.HOURLY_CONSUMPTION_DIFF)
+        )
+        .with_columns(
+            (pl.col(Column.HOURLY_CONSUMPTION) > 0.6).alias(
+                FeatureColumn.SIGNIFICANT_CONSUMPTION
+            )
+        )
+    )
+    if monthly_prices_df is not None:
+        df = df.join(
+            other=monthly_prices_df,
+            on=[FeatureColumn.YEAR, FeatureColumn.MONTH],
+            how="left",
+        ).with_columns(
+            (
+                pl.col(Column.FIXED_HOURLY_PRICE) * pl.col(Column.HOURLY_CONSUMPTION)
+            ).alias(Column.FIXED_HOURLY_TOTAL_COST)
+        )
+
+    return df
+
+
+prices_monthly_df: pl.DataFrame = pl.DataFrame(
+    [
+        PricesMonthly(
+            year=2023,
+            month=6,
+            monthly_price_kwh_in_dkk=96.52,
+        ),
+        PricesMonthly(
+            year=2023,
+            month=7,
+            monthly_price_kwh_in_dkk=110.55,
+        ),
+        PricesMonthly(
+            year=2023,
+            month=8,
+            monthly_price_kwh_in_dkk=100.83,
+        ),
+        PricesMonthly(
+            year=2023,
+            month=9,
+            monthly_price_kwh_in_dkk=108.62,
+        ),
+        PricesMonthly(
+            year=2023,
+            month=10,
+            monthly_price_kwh_in_dkk=98.80,
+        ),
+        PricesMonthly(
+            year=2023,
+            month=11,
+            monthly_price_kwh_in_dkk=112.17,
+        ),
+        PricesMonthly(
+            year=2023,
+            month=12,
+            monthly_price_kwh_in_dkk=108.81,
+        ),
+        PricesMonthly(
+            year=2024,
+            month=1,
+            monthly_price_kwh_in_dkk=105.91,
+        ),
+        PricesMonthly(
+            year=2024,
+            month=2,
+            monthly_price_kwh_in_dkk=91.65,
+        ),
+        PricesMonthly(
+            year=2024,
+            month=3,
+            monthly_price_kwh_in_dkk=76.01,
+        ),
+        PricesMonthly(
+            year=2024,
+            month=4,
+            monthly_price_kwh_in_dkk=67.39,
+        ),
+        PricesMonthly(
+            year=2024,
+            month=5,
+            monthly_price_kwh_in_dkk=70.84,
+        ),
+        PricesMonthly(
+            year=2024,
+            month=6,
+            monthly_price_kwh_in_dkk=78.67,
+        ),
+        PricesMonthly(
+            year=2024,
+            month=7,
+            monthly_price_kwh_in_dkk=82.04,
+        ),
+        PricesMonthly(
+            year=2024,
+            month=8,
+            monthly_price_kwh_in_dkk=80.63,
+        ),
+        PricesMonthly(
+            year=2024,
+            month=9,
+            monthly_price_kwh_in_dkk=94.69,
+        ),
+        PricesMonthly(
+            year=2024,
+            month=10,
+            monthly_price_kwh_in_dkk=81.68,
+        ),
+        PricesMonthly(
+            year=2024,
+            month=11,
+            monthly_price_kwh_in_dkk=98.99,
+        ),
+        PricesMonthly(
+            year=2024,
+            month=12,
+            monthly_price_kwh_in_dkk=111.03,
+        ),
+        PricesMonthly(
+            year=2025,
+            month=1,
+            monthly_price_kwh_in_dkk=111.91,
+        ),
+        PricesMonthly(
+            year=2025,
+            month=2,
+            monthly_price_kwh_in_dkk=92.95,
+        ),
+        PricesMonthly(
+            year=2025,
+            month=3,
+            monthly_price_kwh_in_dkk=99.29,
+        ),
+        PricesMonthly(
+            year=2025,
+            month=4,
+            monthly_price_kwh_in_dkk=86.11,
+        ),
+        PricesMonthly(
+            year=2025,
+            month=5,
+            monthly_price_kwh_in_dkk=72.94,
+        ),
+        PricesMonthly(
+            year=2025,
+            month=6,
+            monthly_price_kwh_in_dkk=85.06,
+        ),
+        PricesMonthly(
+            year=2025,
+            month=7,
+            monthly_price_kwh_in_dkk=87.68,
+        ),
+        PricesMonthly(
+            year=2025,
+            month=8,
+            monthly_price_kwh_in_dkk=88.87,
+        ),
+        PricesMonthly(
+            year=2025,
+            month=9,
+            monthly_price_kwh_in_dkk=90.54,
+        ),
+        PricesMonthly(
+            year=2025,
+            month=10,
+            monthly_price_kwh_in_dkk=97.11,
+        ),
+        PricesMonthly(
+            year=2025,
+            month=11,
+            monthly_price_kwh_in_dkk=114.31,
+        ),
+        PricesMonthly(
+            year=2025,
+            month=12,
+            monthly_price_kwh_in_dkk=116.08,
+        ),
+    ]
+).with_columns(pl.col(Column.FIXED_HOURLY_PRICE) / 100)
+
+prices_monthly_ts: pl.DataFrame = (
+    pl.DataFrame()
+    .with_columns(
+        pl.date_range(start=start, end=end, interval="1d").alias(Column.TIMESTAMP)
+    )
+    .with_columns(pl.col(Column.TIMESTAMP).dt.year().alias(FeatureColumn.YEAR))
+    .with_columns(pl.col(Column.TIMESTAMP).dt.month().alias(FeatureColumn.MONTH))
+    .join(
+        other=prices_monthly_df,
+        on=[FeatureColumn.YEAR, FeatureColumn.MONTH],
+        how="inner",
+    )
+)
+
+
 if __name__ == "__main__":
 
     seq_params = split_request_params_all_versions(start, end)
@@ -204,179 +489,6 @@ if __name__ == "__main__":
         .agg(pl.col("SpotPriceDKK").mean().alias("SpotPriceDKK"))
         .with_columns(price_kwh_in_dkk=pl.col("SpotPriceDKK") / 1000 + _SPOT_FEE_DKK)
     )
-
-    prices_monthly_df: pl.DataFrame = pl.DataFrame(
-        [
-            PricesMonthly(
-                year=2023,
-                month=6,
-                monthly_price_kwh_in_dkk=96.52,
-            ),
-            PricesMonthly(
-                year=2023,
-                month=7,
-                monthly_price_kwh_in_dkk=110.55,
-            ),
-            PricesMonthly(
-                year=2023,
-                month=8,
-                monthly_price_kwh_in_dkk=100.83,
-            ),
-            PricesMonthly(
-                year=2023,
-                month=9,
-                monthly_price_kwh_in_dkk=108.62,
-            ),
-            PricesMonthly(
-                year=2023,
-                month=10,
-                monthly_price_kwh_in_dkk=98.80,
-            ),
-            PricesMonthly(
-                year=2023,
-                month=11,
-                monthly_price_kwh_in_dkk=112.17,
-            ),
-            PricesMonthly(
-                year=2023,
-                month=12,
-                monthly_price_kwh_in_dkk=108.81,
-            ),
-            PricesMonthly(
-                year=2024,
-                month=1,
-                monthly_price_kwh_in_dkk=105.91,
-            ),
-            PricesMonthly(
-                year=2024,
-                month=2,
-                monthly_price_kwh_in_dkk=91.65,
-            ),
-            PricesMonthly(
-                year=2024,
-                month=3,
-                monthly_price_kwh_in_dkk=76.01,
-            ),
-            PricesMonthly(
-                year=2024,
-                month=4,
-                monthly_price_kwh_in_dkk=67.39,
-            ),
-            PricesMonthly(
-                year=2024,
-                month=5,
-                monthly_price_kwh_in_dkk=70.84,
-            ),
-            PricesMonthly(
-                year=2024,
-                month=6,
-                monthly_price_kwh_in_dkk=78.67,
-            ),
-            PricesMonthly(
-                year=2024,
-                month=7,
-                monthly_price_kwh_in_dkk=82.04,
-            ),
-            PricesMonthly(
-                year=2024,
-                month=8,
-                monthly_price_kwh_in_dkk=80.63,
-            ),
-            PricesMonthly(
-                year=2024,
-                month=9,
-                monthly_price_kwh_in_dkk=94.69,
-            ),
-            PricesMonthly(
-                year=2024,
-                month=10,
-                monthly_price_kwh_in_dkk=81.68,
-            ),
-            PricesMonthly(
-                year=2024,
-                month=11,
-                monthly_price_kwh_in_dkk=98.99,
-            ),
-            PricesMonthly(
-                year=2024,
-                month=12,
-                monthly_price_kwh_in_dkk=111.03,
-            ),
-            PricesMonthly(
-                year=2025,
-                month=1,
-                monthly_price_kwh_in_dkk=111.91,
-            ),
-            PricesMonthly(
-                year=2025,
-                month=2,
-                monthly_price_kwh_in_dkk=92.95,
-            ),
-            PricesMonthly(
-                year=2025,
-                month=3,
-                monthly_price_kwh_in_dkk=99.29,
-            ),
-            PricesMonthly(
-                year=2025,
-                month=4,
-                monthly_price_kwh_in_dkk=86.11,
-            ),
-            PricesMonthly(
-                year=2025,
-                month=5,
-                monthly_price_kwh_in_dkk=72.94,
-            ),
-            PricesMonthly(
-                year=2025,
-                month=6,
-                monthly_price_kwh_in_dkk=85.06,
-            ),
-            PricesMonthly(
-                year=2025,
-                month=7,
-                monthly_price_kwh_in_dkk=87.68,
-            ),
-            PricesMonthly(
-                year=2025,
-                month=8,
-                monthly_price_kwh_in_dkk=88.87,
-            ),
-            PricesMonthly(
-                year=2025,
-                month=9,
-                monthly_price_kwh_in_dkk=90.54,
-            ),
-            PricesMonthly(
-                year=2025,
-                month=10,
-                monthly_price_kwh_in_dkk=97.11,
-            ),
-            PricesMonthly(
-                year=2025,
-                month=11,
-                monthly_price_kwh_in_dkk=114.31,
-            ),
-            PricesMonthly(
-                year=2025,
-                month=12,
-                monthly_price_kwh_in_dkk=116.08,
-            ),
-        ]
-    ).with_columns(pl.col("monthly_price_kwh_in_dkk") / 100)
-
-    prices_monthly_ts = (
-        pl.DataFrame()
-        .with_columns(
-            pl.date_range(start=start, end=end, interval="1d").alias("timestamp")
-        )
-        .with_columns(
-            year=pl.col("timestamp").dt.year(),
-            month=pl.col("timestamp").dt.month(),
-        )
-        .join(other=prices_monthly_df, on=["year", "month"], how="inner")
-    )
-
     # Load consumption data
     consumption_df: pl.DataFrame = pl.read_csv(
         source="/Users/wiz/projects/predictive-modeling/data/energi-data.csv",
@@ -388,43 +500,10 @@ if __name__ == "__main__":
     ).rename({"SpotPriceDKK": "consumption_kwh_hourly"})
 
     # Join prices and consumption data
-    joined_df = (
-        prices_df.drop("SpotPriceDKK")
-        .join(other=consumption_df, on="HourUTC", how="left")
-        .with_columns(
-            pl.col("HourUTC")
-            .dt.convert_time_zone("Europe/Copenhagen")
-            .alias("timestamp")
-        )
-        # .filter(pl.col("timestamp").dt.year() >= 2024)
-        .with_columns(pl.col("timestamp").dt.hour().alias("hour_of_day"))
-        .with_columns(pl.col("timestamp").dt.day().alias("day_of_month"))
-        .with_columns(pl.col("timestamp").dt.month().alias("month"))
-        .with_columns(pl.col("timestamp").dt.year().alias("year"))
-        .with_columns(pl.col("timestamp").dt.weekday().alias("weekday"))
-        .with_columns(
-            event_of_day=pl.when(pl.col("hour_of_day").is_between(6, 10, closed="left"))
-            .then(pl.lit("Morning"))  # 0
-            .when(pl.col("hour_of_day").is_between(10, 18, closed="left"))
-            .then(pl.lit("Afternoon"))  # 1
-            .when(pl.col("hour_of_day").is_between(18, 22, closed="left"))
-            .then(pl.lit("Evening"))  # 2
-            .when(
-                pl.col("hour_of_day").is_between(22, 24, closed="both")
-                | pl.col("hour_of_day").is_between(0, 6, closed="left")
-            )
-            .then(pl.lit("Night"))  # 3
-            .otherwise(-99)
-        )
-        .join(other=prices_monthly_df, on=["year", "month"], how="left")
-        .with_columns(
-            consumption_in_dkk=pl.col("price_kwh_in_dkk")
-            * pl.col("consumption_kwh_hourly")
-        )
-        .with_columns(
-            consumption_in_dkk_status_quo=pl.col("monthly_price_kwh_in_dkk")
-            * pl.col("consumption_kwh_hourly")
-        )
+    joined_df = join_prices_and_consumption_data(
+        daily_prices_df=prices_df,
+        daily_consumption_df=consumption_df,
+        monthly_prices_df=prices_monthly_df,
     )
 
     # Mean price by event of day
