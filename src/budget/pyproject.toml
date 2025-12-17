@@ -1,31 +1,35 @@
-[tool.poetry]
+[project]
 name = "budget"
 version = "0.1.0"
 description = ""
-authors = ["wiz <wilsonzhou92@gmail.com>"]
+authors = [{ name = "wiz", email = "wilsonzhou92@gmail.com" }]
+requires-python = ">=3.13,<4"
 readme = "README.md"
-packages = [
-    { include = "wiz/budget" },
+dependencies = [
+    "pytest>=8.3.3,<9",
+    "pyarrow>=18.0.0,<19",
+    "pandas>=2.2.3,<3",
+    "pydantic>=2.9.2,<3",
+    "polars>=1.13.1,<2",
+    "google-auth-oauthlib>=1.2.1,<2",
+    "google-auth-httplib2>=0.2.0,<0.3",
+    "google-api-python-client>=2.153.0,<3",
 ]
 
+[dependency-groups]
+dev = [
+    "mypy>=1.13.0,<2",
+    "pandas-stubs>=2.2.3.241009,<3",
+    "types-python-dateutil>=2.9.0.20241003,<3",
+    "types-requests>=2.32.0.20241016,<3",
+]
 
-[tool.poetry.dependencies]
-python = "^3.13"
-pytest = "^8.3.3"
-pyarrow = "^18.0.0"
-pandas = "^2.2.3"
-pydantic = "^2.9.2"
-polars = "^1.13.1"
-google-auth-oauthlib = "^1.2.1"
-google-auth-httplib2 = "^0.2.0"
-google-api-python-client = "^2.153.0"
+[tool.hatch.build.targets.sdist]
+include = ["wiz/budget"]
 
-[tool.poetry.group.dev.dependencies]
-mypy = "^1.13.0"
-pandas-stubs = "^2.2.3.241009"
-types-python-dateutil = "^2.9.0.20241003"
-types-requests = "^2.32.0.20241016"
+[tool.hatch.build.targets.wheel]
+include = ["wiz/budget"]
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
