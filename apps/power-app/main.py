@@ -1,6 +1,9 @@
 import datetime
+import json
 from pathlib import Path
-
+from typing import Any
+from matplotlib import pyplot as plt
+import seaborn as sns
 import polars as pl
 import streamlit as st
 
@@ -16,7 +19,28 @@ from load_data import (
 )
 
 PRICES_CACHE_PATH = Path(__file__).parent / ".prices_cache.parquet"
-DEFAULT_CONSUMPTION_PATH = "/Users/wiz/projects/predictive-modeling/data/energi-data.csv"
+CONSUMPTION_CACHE_PATH = Path(__file__).parent / ".consumption_cache.parquet"
+
+STATE_FILE = Path(__file__).parent / ".power_app_state.json"
+
+
+def save_state(start: datetime.date, end: datetime.date) -> None:
+    """Save the payment interface state to a temp file."""
+    state = {"start": start.isoformat(), "end": end.isoformat()}
+    STATE_FILE.write_text(json.dumps(state, indent=2))
+
+
+def load_state() -> tuple[datetime.date, datetime.date] | None:
+    """Load the payment interface state from a temp file."""
+    default_start = datetime.date(2020, 1, 1)
+    default_end = datetime.date.today() - datetime.timedelta(days=1)
+    if STATE_FILE.exists():
+        state = json.loads(STATE_FILE.read_text())
+        return (
+            datetime.date.fromisoformat(state["start"]),
+            datetime.date.fromisoformat(state["end"]),
+        )
+    return default_start, default_end
 
 
 @st.cache_data
@@ -35,7 +59,9 @@ def fetch_prices(start: datetime.date, end: datetime.date) -> pl.DataFrame:
     return prices_df
 
 
-def load_prices(start: datetime.date, end: datetime.date, force_refresh: bool) -> pl.DataFrame:
+def load_prices(
+    start: datetime.date, end: datetime.date, force_refresh: bool
+) -> pl.DataFrame:
     """Load prices from cache or fetch from API."""
     if force_refresh and PRICES_CACHE_PATH.exists():
         PRICES_CACHE_PATH.unlink()
@@ -50,16 +76,25 @@ def load_prices(start: datetime.date, end: datetime.date, force_refresh: bool) -
         return prices_df
 
 
-def load_consumption(csv_path: str) -> pl.DataFrame:
+def load_consumption(source: Any, force_refresh: bool) -> pl.DataFrame:
     """Load consumption data from CSV."""
-    return pl.read_csv(
-        source=csv_path,
+    if force_refresh and CONSUMPTION_CACHE_PATH.exists():
+        CONSUMPTION_CACHE_PATH.unlink()
+        st.cache_data.clear()
+
+    if CONSUMPTION_CACHE_PATH.exists():
+        return pl.read_parquet(CONSUMPTION_CACHE_PATH)
+
+    consumption_df = pl.read_csv(
+        source=source,
         decimal_comma=True,
         schema={
             "HourUTC": pl.Datetime,
             "SpotPriceDKK": pl.Float64,
         },
     ).rename({"SpotPriceDKK": "consumption_kwh_hourly"})
+    consumption_df.write_parquet(CONSUMPTION_CACHE_PATH)
+    return consumption_df
 
 
 def main():
@@ -70,21 +105,26 @@ def main():
     st.sidebar.header("Configuration")
 
     # Consumption data source
-    consumption_path = st.sidebar.text_input(
-        "Consumption CSV Path",
-        value=DEFAULT_CONSUMPTION_PATH,
-        help="Path to the consumption CSV file",
+    consumption_file = st.sidebar.file_uploader(
+        "Consumption CSV File",
+        type=["csv"],
+        help="Upload the consumption CSV file",
     )
 
     # Date range
     col1, col2 = st.sidebar.columns(2)
+    start_date, end_date = load_state()
     with col1:
-        start_date = st.date_input("Start Date", value=datetime.date(2020, 1, 1))
+        start_date = st.date_input("Start Date", value=start_date)
     with col2:
-        end_date = st.date_input("End Date", value=datetime.date.today())
+        end_date = st.date_input("End Date", value=end_date)
+
+    save_state(start_date, end_date)
 
     # Force refresh prices
-    force_refresh = st.sidebar.button("🔄 Refresh Prices", help="Force re-fetch prices from API")
+    force_refresh = st.sidebar.button(
+        "🔄 Refresh Prices", help="Force re-fetch prices from API"
+    )
 
     # Show cache status
     if PRICES_CACHE_PATH.exists():
@@ -93,9 +133,14 @@ def main():
         st.sidebar.info("📡 Prices will be fetched")
 
     # Validate inputs
-    if not Path(consumption_path).exists():
-        st.error(f"Consumption file not found: {consumption_path}")
-        return
+    if CONSUMPTION_CACHE_PATH.exists():
+        st.sidebar.success("✅ Consumption cached")
+    else:
+        if consumption_file is None:
+            st.sidebar.info("📡 Waiting for consumption file to be selected")
+            return
+        else:
+            st.sidebar.info("📡 Consumption will be fetched from uploaded file")
 
     if start_date >= end_date:
         st.error("Start date must be before end date")
@@ -104,7 +149,7 @@ def main():
     # Load data
     try:
         prices_df = load_prices(start_date, end_date, force_refresh)
-        consumption_df = load_consumption(consumption_path)
+        consumption_df = load_consumption(consumption_file, force_refresh=False)
         joined_df = join_prices_and_consumption_data(
             daily_prices_df=prices_df,
             daily_consumption_df=consumption_df,
@@ -124,13 +169,21 @@ def main():
 
         # Monthly average price over time
         monthly_prices = (
-            joined_df.group_by(pl.col(Column.TIMESTAMP).dt.truncate("1mo"), maintain_order=True)
+            joined_df.group_by(
+                pl.col(Column.TIMESTAMP).dt.truncate("1mo"), maintain_order=True
+            )
             .agg(pl.col(Column.HOURLY_PRICE).mean().alias(Column.MONTHLY_PRICE_AVG))
-            .with_columns(pl.col(Column.MONTHLY_PRICE_AVG).rolling_mean(window_size=3).alias("rolling_avg"))
+            .with_columns(
+                pl.col(Column.MONTHLY_PRICE_AVG)
+                .rolling_mean(window_size=3)
+                .alias("rolling_avg")
+            )
         )
         st.subheader("Monthly Average Price (DKK/kWh)")
         st.line_chart(
-            monthly_prices.to_pandas().set_index(Column.TIMESTAMP)[[Column.MONTHLY_PRICE_AVG, "rolling_avg"]]
+            monthly_prices.to_pandas().set_index(Column.TIMESTAMP)[
+                [Column.MONTHLY_PRICE_AVG, "rolling_avg"]
+            ]
         )
 
         # Summary metrics
@@ -140,7 +193,10 @@ def main():
             st.metric("Avg Price (DKK/kWh)", f"{avg_price:.3f}" if avg_price else "N/A")
         with col2:
             total_consumption = joined_df[Column.HOURLY_CONSUMPTION].sum()
-            st.metric("Total Consumption (kWh)", f"{total_consumption:,.0f}" if total_consumption else "N/A")
+            st.metric(
+                "Total Consumption (kWh)",
+                f"{total_consumption:,.0f}" if total_consumption else "N/A",
+            )
         with col3:
             total_cost = joined_df[Column.HOURLY_TOTAL_COST].sum()
             st.metric("Total Cost (DKK)", f"{total_cost:,.0f}" if total_cost else "N/A")
@@ -148,22 +204,31 @@ def main():
     with tab2:
         st.header("Monthly Power Cost")
 
+        relevant_data = joined_df.filter(pl.col(Column.HOURLY_TOTAL_COST).is_not_null())
+
         year_filter = st.selectbox(
             "Filter by Year",
-            options=["All"] + sorted(joined_df[FeatureColumn.YEAR].unique().to_list(), reverse=True),
+            options=["All"]
+            + sorted(
+                relevant_data[FeatureColumn.YEAR].unique().to_list(), reverse=True
+            ),
         )
 
-        df_filtered = joined_df
+        df_filtered = relevant_data
         if year_filter != "All":
-            df_filtered = joined_df.filter(pl.col(FeatureColumn.YEAR) == year_filter)
+            df_filtered = relevant_data.filter(
+                pl.col(FeatureColumn.YEAR) == year_filter
+            )
 
-        monthly_cost = (
-            df_filtered.group_by(pl.col(Column.TIMESTAMP).dt.truncate("1mo"), maintain_order=True)
-            .agg(pl.col(Column.HOURLY_TOTAL_COST).sum().alias(Column.MONTHLY_TOTAL_COST))
-            .filter(pl.col(Column.MONTHLY_TOTAL_COST).is_not_null())
+        monthly_cost = df_filtered.group_by(
+            pl.col(FeatureColumn.MONTH_KEY), maintain_order=True
+        ).agg(pl.col(Column.HOURLY_TOTAL_COST).sum().alias(Column.MONTHLY_TOTAL_COST))
+
+        st.bar_chart(
+            monthly_cost.to_pandas().set_index(FeatureColumn.MONTH_KEY)[
+                Column.MONTHLY_TOTAL_COST
+            ]
         )
-
-        st.bar_chart(monthly_cost.to_pandas().set_index(Column.TIMESTAMP)[Column.MONTHLY_TOTAL_COST])
 
         # Cost by time of day
         st.subheader("Cost by Time of Day")
@@ -172,7 +237,11 @@ def main():
             .agg(pl.col(Column.HOURLY_TOTAL_COST).sum().alias("total_cost"))
             .filter(pl.col("total_cost").is_not_null())
         )
-        st.bar_chart(cost_by_event.to_pandas().set_index(FeatureColumn.EVENT_OF_DAY)["total_cost"])
+        st.bar_chart(
+            cost_by_event.to_pandas().set_index(FeatureColumn.EVENT_OF_DAY)[
+                "total_cost"
+            ]
+        )
 
     with tab3:
         st.header("Consumption Patterns")
@@ -184,7 +253,11 @@ def main():
             .group_by(FeatureColumn.YEAR, FeatureColumn.HOUR_OF_DAY)
             .agg(pl.mean(Column.HOURLY_CONSUMPTION).alias("avg_consumption"))
             .sort(FeatureColumn.HOUR_OF_DAY)
-            .pivot(on=FeatureColumn.YEAR, index=FeatureColumn.HOUR_OF_DAY, values="avg_consumption")
+            .pivot(
+                on=FeatureColumn.YEAR,
+                index=FeatureColumn.HOUR_OF_DAY,
+                values="avg_consumption",
+            )
         )
         st.line_chart(hourly_pattern.to_pandas().set_index(FeatureColumn.HOUR_OF_DAY))
 
@@ -200,8 +273,12 @@ def main():
                 index=FeatureColumn.MONTH,
                 values="avg_consumption",
             )
+            .to_pandas()
+            .set_index(FeatureColumn.MONTH)
         )
-        st.dataframe(heatmap_data.to_pandas().set_index(FeatureColumn.MONTH), use_container_width=True)
+        fig = plt.figure()
+        sns.heatmap(heatmap_data)
+        st.pyplot(fig)
 
     with tab4:
         st.header("Raw Data")
