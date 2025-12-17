@@ -1,21 +1,19 @@
-[tool.poetry]
-name = "budget-app"
+[project]
+name = "budget-app2"
 version = "0.1.0"
-description = ""
-authors = ["wiz <wilsonzhou92@gmail.com>"]
+description = "Add your description here"
 readme = "README.md"
-package-mode = false
+requires-python = ">=3.13"
+dependencies = [
+    "python-dotenv>=1.2.1",
+    "streamlit>=1.52.1",
+    "watchdog>=6.0.0",
+]
 
-[tool.poetry.dependencies]
-budget = { path = "../../src/budget", develop = true }
-python = "^3.13"
-streamlit = "^1.42.0"
-python-dotenv = "^1.0.1"
-watchdog = "^6.0.0"
-ipykernel = "^6.29.5"
-statsmodels = "^0.14.4"
-patsy = "^1.0.1"
+[dependency-groups]
+dev = [
+    "budget",
+]
 
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+[tool.uv.sources]
+budget = { path = "../../src/budget" }

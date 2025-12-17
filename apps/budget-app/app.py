@@ -1,13 +1,30 @@
-from operator import attrgetter
+from collections.abc import Iterator
 import os
 import datetime
-import uuid
+import pathlib
+import tempfile
 import dateutil
 import pydantic
 import polars as pl
 import streamlit as st
 from wiz.budget import data_loader, payment, schemas
 from dotenv import load_dotenv
+
+# Use a consistent temp file path
+STATE_FILE = pathlib.Path(tempfile.gettempdir()) / "budget_app_state.json"
+
+
+def save_state(interface: schemas.PaymentInterface) -> None:
+    """Save the payment interface state to a temp file."""
+    STATE_FILE.write_text(interface.model_dump_json(indent=2))
+
+
+def load_state() -> schemas.PaymentInterface | None:
+    """Load the payment interface state from a temp file."""
+    if STATE_FILE.exists():
+        return schemas.PaymentInterface.model_validate_json(STATE_FILE.read_text())
+    return None
+
 
 load_dotenv()
 
@@ -59,7 +76,72 @@ def load_expected_income_to_polars(
     return income_data
 
 
-def collect_payment_interface_inputs() -> schemas.PaymentInterface:
+def _render_planned_projects(
+    planned_projects: list[schemas.Record], num_projects: int | None
+) -> list[schemas.Record]:
+    assert num_projects >= 0
+    col1, col2, col3 = st.columns([2, 1, 1])
+
+    if num_projects is not None and len(planned_projects) > 0:
+        raise ValueError("num_projects and planned_projects cannot both be provided")
+    if num_projects is None and not planned_projects:
+        return []
+
+    projects = (
+        planned_projects
+        if planned_projects
+        else [
+            schemas.Record(
+                amount=10_000.0,
+                date=datetime.date(
+                    year=datetime.date.today().year,
+                    month=datetime.date.today().month,
+                    day=1,
+                )
+                + dateutil.relativedelta.relativedelta(months=1),
+            )
+            for _ in range(num_projects)
+        ]
+    )
+
+    records = []
+    for i, project in enumerate(projects):
+        with col1:
+            _ = st.text_input(f"Project {i+1} Name", key=f"name_{i}")
+        with col2:
+            amount = st.number_input(
+                f"Project {i+1} Amount",
+                value=project.amount,
+                step=1000.0,
+                key=f"project_amount_{i}",
+            )
+        with col3:
+            due_date = st.date_input(
+                f"Project {i+1} Due Date",
+                value=project.date,
+                key=f"project_due_date_{i}",
+            )
+        if amount:
+            records.append(schemas.Record(amount=amount, date=due_date))
+
+
+def collect_payment_interface_inputs(
+    previous_state: schemas.PaymentInterface | None = None,
+) -> schemas.PaymentInterface:
+    if previous_state:
+        saldo = previous_state.saldo
+        monthly_salary = previous_state.monthly_salary
+        additional_cost = previous_state.additional_cost
+        periods = previous_state.periods
+        planned_projects = previous_state.planned_projects
+
+    else:
+        saldo = 30_000.0
+        monthly_salary = 44_000.0
+        additional_cost = 6_000.0
+        periods = 12
+        planned_projects = []
+
     # Streamlit App
     st.title("💰 Payment Interface App")
     with st.container():
@@ -67,55 +149,36 @@ def collect_payment_interface_inputs() -> schemas.PaymentInterface:
 
         with col1:
             saldo = st.number_input(
-                "💰 Current Balance (Saldo)", value=30_000.0, step=1_000.0
+                "💰 Current Balance (Saldo)", value=saldo, step=1_000.0
             )
 
         with col2:
             monthly_salary = st.number_input(
-                "💵 Monthly Salary", value=44_000.0, step=1_000.0
+                "💵 Monthly Salary", value=monthly_salary, step=1_000.0
             )
         with col3:
             additional_cost = st.number_input(
-                "💸 Additional Monthly Cost", value=6_000.0, step=500.0
+                "💸 Additional Monthly Cost", value=additional_cost, step=500.0
             )
 
     col1, col2, col3 = st.columns([2, 1, 1])
     with col1:
-        periods = st.number_input("📅 Number of Periods", value=12, step=1, min_value=1)
+        periods = st.number_input(
+            "📅 Number of Periods", value=periods, step=1, min_value=1
+        )
     with col2:
         rundate = st.date_input("📆 Run Date", value=datetime.date.today())
     with col3:
+        project_count = len(planned_projects) if planned_projects else 1
         num_projects: int = st.number_input(
-            "📊 Planned Projects", value=1, step=1, min_value=0
+            "📊 Planned Projects", value=project_count, step=1, min_value=0
         )
 
     st.title("📊 Planned Projects")
-    planned_projects = []
-
-    for i in range(num_projects):
-        col1, col2, col3 = st.columns([2, 1, 1])
-        with col1:
-            _ = st.text_input(f"Project {i+1} Name", key=f"name_{i}")
-        with col2:
-            amount = st.number_input(
-                f"Project {i+1} Amount",
-                value=10_000.0,
-                step=1000.0,
-                key=f"project_amount_{i}",
-            )
-        with col3:
-            due_date = st.date_input(
-                f"Project {i+1} Due Date",
-                value=datetime.date(
-                    year=datetime.date.today().year,
-                    month=datetime.date.today().month,
-                    day=1,
-                )
-                + dateutil.relativedelta.relativedelta(months=i + 1),
-                key=f"project_due_date_{i}",
-            )
-        if amount:
-            planned_projects.append(schemas.Record(amount=amount, date=due_date))
+    if not planned_projects:
+        planned_projects = _render_planned_projects(
+            planned_projects=planned_projects, num_projects=num_projects
+        )
 
     # Submit Button
     if st.button("Submit", key="submit_button"):
@@ -125,7 +188,7 @@ def collect_payment_interface_inputs() -> schemas.PaymentInterface:
                 saldo=saldo,
                 monthly_salary=monthly_salary,
                 additional_cost=additional_cost,
-                planned_projects=planned_projects,
+                planned_projects=planned_projects or [],
                 periods=periods,
                 rundate=rundate,
             )
@@ -139,9 +202,11 @@ def collect_payment_interface_inputs() -> schemas.PaymentInterface:
 
 
 def main() -> None:
-    interface = collect_payment_interface_inputs()
+    prev_state = load_state()
+    interface = collect_payment_interface_inputs(previous_state=prev_state)
     if interface:
         calculate(interface)
+        save_state(interface)
 
 
 def calculate(payment_interface: schemas.PaymentInterface) -> None:
