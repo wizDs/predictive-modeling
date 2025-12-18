@@ -309,6 +309,12 @@ def main():
                 .rolling_sum_by(Column.UTC_TIME, window_size="1mo")
                 .alias(Column.HOURLY_CONSUMPTION_ROLLING_SUM)
             )
+            .with_columns(
+                (
+                    pl.col(Column.FIXED_HOURLY_TOTAL_COST)
+                    - pl.col(Column.HOURLY_TOTAL_COST)
+                ).alias("cost_difference")
+            )
         )
 
         df = (
@@ -353,8 +359,48 @@ def main():
             y="total_cost",
             hue="price_type",
         )
-        plt.xticks(rotation=90, ha="center")
+        plt.xticks(rotation=90)
         st.pyplot(fig)
+
+        _month = st.multiselect(
+            "Select Month",
+            options=compare_df[FeatureColumn.MONTH_KEY].unique().to_list(),
+        )
+        if _month:
+            fig = plt.figure(figsize=(10, 5))
+            investigation_df = what_if_df.filter(
+                pl.col(FeatureColumn.MONTH_KEY).is_in(_month)
+            )
+            sns.barplot(
+                data=investigation_df,
+                x=Column.TIMESTAMP,
+                y="cost_difference",
+            )
+            plt.xticks(
+                ticks=range(len(investigation_df)),
+                labels=[
+                    t.strftime("%y%m%d") if t.hour == 0 else ""
+                    for t in investigation_df[Column.TIMESTAMP]
+                ],
+                rotation=90,
+            )
+            st.pyplot(fig)
+
+            fig = plt.figure(figsize=(10, 5))
+            sns.barplot(
+                data=investigation_df,
+                x=Column.TIMESTAMP,
+                y=Column.HOURLY_PRICE,
+            )
+            plt.xticks(
+                ticks=range(len(investigation_df)),
+                labels=[
+                    t.strftime("%y%m%d") if t.hour == 0 else ""
+                    for t in investigation_df[Column.TIMESTAMP]
+                ],
+                rotation=90,
+            )
+            st.pyplot(fig)
 
     with tab5:
         st.header("Raw Data")

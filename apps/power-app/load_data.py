@@ -268,7 +268,7 @@ def join_prices_and_consumption_data(
             pl.col(Column.TIMESTAMP)
             .dt.truncate("1mo")
             .dt.strftime("%y%m")
-            # .cast(pl.Int64())
+            .cast(pl.Int64())
             .alias(FeatureColumn.MONTH_KEY)
         )
         .with_columns(
