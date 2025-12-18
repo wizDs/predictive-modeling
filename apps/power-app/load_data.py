@@ -49,6 +49,16 @@ class Column(enum.StrEnum):
     """difference in HOURLY_CONSUMPTION in kwh"""
 
 
+def cost_type_short_name(col: Column) -> str:
+    match col:
+        case Column.MONTHLY_TOTAL_COST:
+            return "variable"
+        case Column.FIXED_MONTHLY_TOTAL_COST:
+            return "fixed"
+        case _:
+            raise ValueError(f"Invalid column: {col}")
+
+
 class FeatureColumn(enum.StrEnum):
     YEAR = "year"
     MONTH = "month"
@@ -258,6 +268,7 @@ def join_prices_and_consumption_data(
             pl.col(Column.TIMESTAMP)
             .dt.truncate("1mo")
             .dt.strftime("%y%m")
+            # .cast(pl.Int64())
             .alias(FeatureColumn.MONTH_KEY)
         )
         .with_columns(

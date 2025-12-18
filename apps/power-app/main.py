@@ -13,6 +13,7 @@ from load_data import (
     FeatureColumn,
     MAX_WORKERS,
     _SPOT_FEE_DKK,
+    cost_type_short_name,
     join_prices_and_consumption_data,
     prices_monthly_df,
     split_request_params_all_versions,
@@ -160,8 +161,14 @@ def main():
         return
 
     # Dashboard tabs
-    tab1, tab2, tab3, tab4 = st.tabs(
-        ["📊 Overview", "💰 Monthly Costs", "📈 Consumption Patterns", "🔍 Raw Data"]
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(
+        [
+            "📊 Overview",
+            "💰 Monthly Costs",
+            "📈 Consumption Patterns",
+            "🤔 What-if Analysis",
+            "🔍 Raw Data",
+        ]
     )
 
     with tab1:
@@ -281,6 +288,75 @@ def main():
         st.pyplot(fig)
 
     with tab4:
+        st.header("What-if Analysis")
+
+        offset_years = st.number_input(
+            "Offset by (years)", value=0, min_value=0, max_value=10
+        )
+
+        what_if_df = join_prices_and_consumption_data(
+            daily_prices_df=prices_df,
+            daily_consumption_df=consumption_df.with_columns(
+                pl.col(Column.UTC_TIME).dt.offset_by(f"-{offset_years}y")
+            ),
+            monthly_prices_df=prices_monthly_df,
+        )
+        what_if_df = (
+            what_if_df.filter(pl.col(Column.HOURLY_CONSUMPTION).is_not_null())
+            .sort(Column.UTC_TIME)
+            .with_columns(
+                pl.col(Column.HOURLY_CONSUMPTION)
+                .rolling_sum_by(Column.UTC_TIME, window_size="1mo")
+                .alias(Column.HOURLY_CONSUMPTION_ROLLING_SUM)
+            )
+        )
+
+        df = (
+            what_if_df.group_by(pl.col(FeatureColumn.MONTH_KEY), maintain_order=True)
+            .agg(
+                [
+                    pl.col(Column.HOURLY_TOTAL_COST)
+                    .sum()
+                    .alias(Column.MONTHLY_TOTAL_COST),
+                    pl.col(Column.FIXED_HOURLY_TOTAL_COST)
+                    .sum()
+                    .alias(Column.FIXED_MONTHLY_TOTAL_COST),
+                ]
+            )
+            .filter(pl.col(Column.MONTHLY_TOTAL_COST) > 0)
+        )
+        fig = plt.figure(figsize=(10, 5))
+        sns.barplot(data=df, x=FeatureColumn.MONTH_KEY, y=Column.MONTHLY_TOTAL_COST)
+        plt.xticks(rotation=90)
+        st.pyplot(fig)
+
+        st.subheader("Variable vs Fixed Price")
+        compare_df = (
+            df.filter(pl.col(Column.FIXED_MONTHLY_TOTAL_COST) > 0)
+            .unpivot(
+                on=[Column.MONTHLY_TOTAL_COST, Column.FIXED_MONTHLY_TOTAL_COST],
+                index=FeatureColumn.MONTH_KEY,
+                variable_name="price_type",
+                value_name="total_cost",
+            )
+            .with_columns(
+                pl.col("price_type").map_elements(
+                    cost_type_short_name, return_dtype=pl.Utf8
+                )
+            )
+            .sort(FeatureColumn.MONTH_KEY)
+        )
+        fig = plt.figure(figsize=(10, 5))
+        sns.barplot(
+            data=compare_df,
+            x=FeatureColumn.MONTH_KEY,
+            y="total_cost",
+            hue="price_type",
+        )
+        plt.xticks(rotation=90, ha="center")
+        st.pyplot(fig)
+
+    with tab5:
         st.header("Raw Data")
 
         st.subheader("Prices Data")
