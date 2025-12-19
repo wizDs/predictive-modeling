@@ -85,15 +85,34 @@ def load_consumption(source: Any, force_refresh: bool) -> pl.DataFrame:
 
     if CONSUMPTION_CACHE_PATH.exists():
         return pl.read_parquet(CONSUMPTION_CACHE_PATH)
-
-    consumption_df = pl.read_csv(
-        source=source,
-        decimal_comma=True,
-        schema={
-            "HourUTC": pl.Datetime,
-            "SpotPriceDKK": pl.Float64,
-        },
-    ).rename({"SpotPriceDKK": "consumption_kwh_hourly"})
+    try:
+        consumption_df = pl.read_csv(
+            source=source,
+            decimal_comma=True,
+            schema={
+                "HourUTC": pl.Datetime,
+                "SpotPriceDKK": pl.Float64,
+            },
+        ).rename({"SpotPriceDKK": "consumption_kwh_hourly"})
+    except Exception as _:
+        consumption_df = (
+            pl.read_csv(
+                source=source,
+                decimal_comma=True,
+                separator=";",
+                schema={
+                    "MålepunktsID": pl.Int64,
+                    "Fra_dato": pl.Utf8,
+                    "Til_dato": pl.Utf8,
+                    "Mængde": pl.Float64,
+                    "Måleenhed": pl.Utf8,
+                    "Kvalitet": pl.Utf8,
+                    "Type": pl.Utf8,
+                },
+            )
+            .with_columns(pl.col("Fra_dato").str.to_datetime("%d-%m-%Y %H:%M:%S"))
+            .rename({"Fra_dato": "HourUTC", "Mængde": "consumption_kwh_hourly"})
+        )
     consumption_df.write_parquet(CONSUMPTION_CACHE_PATH)
     return consumption_df
 
@@ -150,7 +169,7 @@ def main():
     # Load data
     try:
         prices_df = load_prices(start_date, end_date, force_refresh)
-        consumption_df = load_consumption(consumption_file, force_refresh=False)
+        consumption_df = load_consumption(consumption_file, force_refresh=True)
         joined_df = join_prices_and_consumption_data(
             daily_prices_df=prices_df,
             daily_consumption_df=consumption_df,
@@ -268,25 +287,6 @@ def main():
         )
         st.line_chart(hourly_pattern.to_pandas().set_index(FeatureColumn.HOUR_OF_DAY))
 
-        # Monthly heatmap data
-        st.subheader("Consumption Heatmap (Month vs Hour)")
-        heatmap_data = (
-            joined_df.filter(pl.col(Column.HOURLY_CONSUMPTION) > 0)
-            .group_by(FeatureColumn.MONTH, FeatureColumn.HOUR_OF_DAY)
-            .agg(pl.mean(Column.HOURLY_CONSUMPTION).alias("avg_consumption"))
-            .sort(FeatureColumn.MONTH, FeatureColumn.HOUR_OF_DAY)
-            .pivot(
-                on=FeatureColumn.HOUR_OF_DAY,
-                index=FeatureColumn.MONTH,
-                values="avg_consumption",
-            )
-            .to_pandas()
-            .set_index(FeatureColumn.MONTH)
-        )
-        fig = plt.figure()
-        sns.heatmap(heatmap_data)
-        st.pyplot(fig)
-
     with tab4:
         st.header("What-if Analysis")
 
@@ -331,36 +331,33 @@ def main():
             )
             .filter(pl.col(Column.MONTHLY_TOTAL_COST) > 0)
         )
-        fig = plt.figure(figsize=(10, 5))
-        sns.barplot(data=df, x=FeatureColumn.MONTH_KEY, y=Column.MONTHLY_TOTAL_COST)
-        plt.xticks(rotation=90)
-        st.pyplot(fig)
+        st.bar_chart(
+            df,
+            x=FeatureColumn.MONTH_KEY,
+            y=Column.MONTHLY_TOTAL_COST,
+            height=500,
+        )
 
         st.subheader("Variable vs Fixed Price")
         compare_df = (
             df.filter(pl.col(Column.FIXED_MONTHLY_TOTAL_COST) > 0)
-            .unpivot(
-                on=[Column.MONTHLY_TOTAL_COST, Column.FIXED_MONTHLY_TOTAL_COST],
-                index=FeatureColumn.MONTH_KEY,
-                variable_name="price_type",
-                value_name="total_cost",
+            .rename(
+                {
+                    Column.MONTHLY_TOTAL_COST: "variable",
+                    Column.FIXED_MONTHLY_TOTAL_COST: "fixed",
+                }
             )
-            .with_columns(
-                pl.col("price_type").map_elements(
-                    cost_type_short_name, return_dtype=pl.Utf8
-                )
-            )
+            .select(FeatureColumn.MONTH_KEY, "variable", "fixed")
             .sort(FeatureColumn.MONTH_KEY)
         )
-        fig = plt.figure(figsize=(10, 5))
-        sns.barplot(
-            data=compare_df,
+        st.bar_chart(
+            compare_df,
             x=FeatureColumn.MONTH_KEY,
-            y="total_cost",
-            hue="price_type",
+            y=["variable", "fixed"],
+            stack=False,
+            height=500,
+            use_container_width=True,
         )
-        plt.xticks(rotation=90)
-        st.pyplot(fig)
 
         _month = st.multiselect(
             "Select Month",
