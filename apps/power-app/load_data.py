@@ -67,6 +67,7 @@ class FeatureColumn(enum.StrEnum):
     WEEKDAY = "weekday"
     EVENT_OF_DAY = "event_of_day"
     MONTH_KEY = "month_key"
+    DAY_KEY = "day_key"
     SIGNIFICANT_CONSUMPTION = "significant_consumption"
 
 
@@ -257,7 +258,10 @@ def join_prices_and_consumption_data(
         )
         # .filter(pl.col("timestamp").dt.year() >= 2024)
         .with_columns(
-            pl.col(Column.TIMESTAMP).dt.hour().alias(FeatureColumn.HOUR_OF_DAY)
+            pl.col(Column.TIMESTAMP)
+            .dt.hour()
+            .alias(FeatureColumn.HOUR_OF_DAY)
+            .cast(pl.Int8())
         )
         .with_columns(
             pl.col(Column.TIMESTAMP).dt.day().alias(FeatureColumn.DAY_OF_MONTH)
@@ -270,6 +274,13 @@ def join_prices_and_consumption_data(
             .dt.strftime("%y%m")
             .cast(pl.Int64())
             .alias(FeatureColumn.MONTH_KEY)
+        )
+        .with_columns(
+            pl.col(Column.TIMESTAMP)
+            .dt.truncate("1d")
+            .dt.strftime("%y%m%d")
+            .cast(pl.Int64())
+            .alias(FeatureColumn.DAY_KEY)
         )
         .with_columns(
             pl.col(Column.TIMESTAMP).dt.weekday().alias(FeatureColumn.WEEKDAY)
