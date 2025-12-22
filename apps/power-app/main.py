@@ -77,14 +77,17 @@ def load_prices(
         return prices_df
 
 
-def load_consumption(source: Any, force_refresh: bool) -> pl.DataFrame:
+def load_consumption(source: Any) -> pl.DataFrame | None:
     """Load consumption data from CSV."""
-    if force_refresh and CONSUMPTION_CACHE_PATH.exists():
-        CONSUMPTION_CACHE_PATH.unlink()
-        st.cache_data.clear()
 
     if CONSUMPTION_CACHE_PATH.exists():
-        return pl.read_parquet(CONSUMPTION_CACHE_PATH)
+        # if selected a new file, clear the cache
+        if source is not None:
+            CONSUMPTION_CACHE_PATH.unlink()
+            st.cache_data.clear()
+        # if no file is selected, load the cached data
+        else:
+            return pl.read_parquet(CONSUMPTION_CACHE_PATH)
     try:
         consumption_df = pl.read_csv(
             source=source,
@@ -169,7 +172,7 @@ def main():
     # Load data
     try:
         prices_df = load_prices(start_date, end_date, force_refresh)
-        consumption_df = load_consumption(consumption_file, force_refresh=True)
+        consumption_df = load_consumption(consumption_file)
         joined_df = join_prices_and_consumption_data(
             daily_prices_df=prices_df,
             daily_consumption_df=consumption_df,
