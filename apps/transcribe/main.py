@@ -175,35 +175,58 @@ with st.sidebar:
 with st.spinner(f"Loading {model_choice.value} model..."):
     model = load_model(model_choice)
 
-# Main content
-st.markdown("### 🎤 Record Audio")
+# Main content - tabs for record vs upload
+tab_record, tab_upload = st.tabs(["🎤 Record", "📁 Upload File"])
 
-# Native Streamlit audio input
-audio_data = st.audio_input(
-    "Click to record from your microphone",
-    key="audio_recorder",
-)
+audio_data = None
+audio_name: str
 
-# Process recorded audio
+with tab_record:
+    recorded_audio = st.audio_input(
+        "Click to record from your microphone",
+        key="audio_recorder",
+    )
+    if recorded_audio:
+        audio_data = recorded_audio
+        audio_name = "recording"
+
+with tab_upload:
+    uploaded_file = st.file_uploader(
+        "Upload an audio file",
+        type=["wav", "mp3", "m4a", "ogg", "flac", "webm"],
+        key="audio_uploader",
+    )
+    if uploaded_file:
+        audio_data = uploaded_file
+        audio_name = Path(uploaded_file.name).stem
+
+# Process audio (from either source)
 if audio_data is not None:
     # Display audio player
     st.markdown("### 🔊 Playback")
-    st.audio(audio_data, format="audio/wav")
+    st.audio(audio_data)
 
-    # Download button
-    now = datetime.now().strftime("%Y%m%d_%H%M%S")
-    st.download_button(
-        label="⬇️ Download Recording",
-        data=audio_data,
-        file_name=f"recording-{now}.wav",
-        mime="audio/wav",
-    )
+    # Download button (only for recordings)
+    if audio_name == "recording":
+        now = datetime.now().strftime("%Y%m%d_%H%M%S")
+        st.download_button(
+            label="⬇️ Download Recording",
+            data=audio_data,
+            file_name=f"recording-{now}.wav",
+            mime="audio/wav",
+        )
 
     # Transcribe button
     if st.button("✨ Transcribe", use_container_width=True):
         with st.spinner("Transcribing..."):
+            # Determine file extension
+            if hasattr(audio_data, "name"):
+                suffix = Path(audio_data.name).suffix or ".wav"
+            else:
+                suffix = ".wav"
+
             # Save audio to temp file
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_file:
+            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp_file:
                 tmp_file.write(audio_data.getvalue())
                 tmp_path = tmp_file.name
 
@@ -249,8 +272,8 @@ else:
     st.markdown(
         """
         <div class="info-card">
-        <p>👆 Click the <strong>microphone button</strong> above to record audio.</p>
-        <p>When done recording, click <strong>Transcribe</strong> to get your text.</p>
+        <p>👆 Use the <strong>Record</strong> tab to record from your microphone,</p>
+        <p>or the <strong>Upload File</strong> tab to transcribe an existing audio file.</p>
         </div>
         """,
         unsafe_allow_html=True,
