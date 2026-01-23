@@ -49,6 +49,10 @@ def load_expected_payments_to_polars(
         column_start="A",
         column_end="I",
     )
+
+    with st.expander("Table View"):
+        st.write(pl.DataFrame(payments))
+
     return pl.DataFrame(
         payment.calculate_total_payments(
             eval_date=eval_date,

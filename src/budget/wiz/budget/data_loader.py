@@ -56,9 +56,9 @@ def get_payment_data(
         _rows = []
         for row in rows:
             try:
-                _rows += [
-                    schemas.Payment(**dict(zip(schemas.Payment.model_fields, row)))
-                ]
+                d = dict(zip(schemas.Payment.model_fields, row))
+                p = schemas.Payment.model_validate(d)
+                _rows += [p]
             except Exception as e:
                 _row = dict(zip(schemas.Payment.model_fields, row))
                 raise RuntimeError(_row) from e
@@ -93,7 +93,9 @@ def get_income_data(
         _rows = []
         for row in rows:
             try:
-                _rows += [schemas.Record(**dict(zip(schemas.Record.model_fields, row)))]
+                d = dict(zip(schemas.Payment.model_fields, row))
+                p = schemas.Payment.model_validate(d)
+                _rows += [p]
             except Exception as e:
                 _row = dict(zip(schemas.Record.model_fields, row))
                 raise RuntimeError(_row) from e

@@ -16,4 +16,4 @@ dev = [
 ]
 
 [tool.uv.sources]
-budget = { path = "../../src/budget" }
+budget = { path = "../../src/budget", editable = true }

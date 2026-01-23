@@ -48,7 +48,7 @@ wheels = [
 [[package]]
 name = "budget"
 version = "0.1.0"
-source = { directory = "../../src/budget" }
+source = { editable = "../../src/budget" }
 dependencies = [
     { name = "google-api-python-client" },
     { name = "google-auth-httplib2" },
@@ -103,7 +103,7 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
-dev = [{ name = "budget", directory = "../../src/budget" }]
+dev = [{ name = "budget", editable = "../../src/budget" }]
 
 [[package]]
 name = "cachetools"

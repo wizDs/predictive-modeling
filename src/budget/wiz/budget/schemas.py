@@ -66,6 +66,8 @@ class Payment(pydantic.BaseModel):
         match x:
             case None:
                 return None
+            case "":
+                return 0
             case float():
                 return x
             case str():
@@ -91,9 +93,11 @@ class Payment(pydantic.BaseModel):
             assert 0 <= m <= 12
         return self
 
-    def model_post_init(self: "Payment", _) -> None:
-        self.annual_price = self.price * self.payment_type.months
+    @pydantic.model_validator(mode="after")
+    def validate_payment(self: "Payment") -> "Payment":
+        self.annual_price = self.price * (12 / self.payment_type.months)
         self.monthly_price = self.price / self.payment_type.months
+        return self
 
 
 class Record(pydantic.BaseModel):
