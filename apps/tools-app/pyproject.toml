@@ -1,0 +1,26 @@
+[project]
+name = "tools-app"
+version = "0.1.0"
+description = "Unified multi-tool Streamlit app"
+requires-python = ">=3.13"
+dependencies = [
+    "joblib>=1.5.3",
+    "openai-whisper>=20250625",
+    "pandas>=2.3.3",
+    "polars>=1.36.1",
+    "pydantic>=2.12.5",
+    "python-dateutil>=2.9.0",
+    "python-dotenv>=1.2.1",
+    "requests>=2.32.5",
+    "seaborn>=0.13.2",
+    "streamlit>=1.52.1",
+    "watchdog>=6.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "budget",
+]
+
+[tool.uv.sources]
+budget = { path = "../../src/budget", editable = true }
