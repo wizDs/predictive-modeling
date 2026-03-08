@@ -168,3 +168,4 @@ data
 # Cache files
 .prices_cache.parquet
 *.parquet
+.power_app_state.json
