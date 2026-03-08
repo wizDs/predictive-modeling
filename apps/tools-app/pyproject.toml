@@ -20,7 +20,9 @@ dependencies = [
 [dependency-groups]
 dev = [
     "budget",
+    "power-app",
 ]
 
 [tool.uv.sources]
 budget = { path = "../../src/budget", editable = true }
+power-app = { path = "./power-app", editable = true }

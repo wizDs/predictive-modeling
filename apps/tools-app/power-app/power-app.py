@@ -2,12 +2,11 @@ import datetime
 import json
 from pathlib import Path
 from typing import Any
-from matplotlib import pyplot as plt
-import seaborn as sns
+
 import polars as pl
 import streamlit as st
 
-from load_data import (
+from power_app.load_data import (
     Column,
     EnergyDataClient,
     FeatureColumn,
@@ -21,18 +20,15 @@ from load_data import (
 
 PRICES_CACHE_PATH = Path(__file__).parent / ".prices_cache.parquet"
 CONSUMPTION_CACHE_PATH = Path(__file__).parent / ".consumption_cache.parquet"
-
 STATE_FILE = Path(__file__).parent / ".power_app_state.json"
 
 
 def save_state(start: datetime.date, end: datetime.date) -> None:
-    """Save the payment interface state to a temp file."""
     state = {"start": start.isoformat(), "end": end.isoformat()}
     STATE_FILE.write_text(json.dumps(state, indent=2))
 
 
-def load_state() -> tuple[datetime.date, datetime.date] | None:
-    """Load the payment interface state from a temp file."""
+def load_state() -> tuple[datetime.date, datetime.date]:
     default_start = datetime.date(2020, 1, 1)
     default_end = datetime.date.today() - datetime.timedelta(days=1)
     if STATE_FILE.exists():
@@ -46,24 +42,20 @@ def load_state() -> tuple[datetime.date, datetime.date] | None:
 
 @st.cache_data
 def fetch_prices(start: datetime.date, end: datetime.date) -> pl.DataFrame:
-    """Fetch prices from API and cache them."""
     client = EnergyDataClient()
     seq_params = split_request_params_all_versions(start, end)
     prices = client.get(seq_parameters=seq_params, n_jobs=MAX_WORKERS)
-
-    prices_df = (
+    return (
         pl.DataFrame(prices)
         .group_by(pl.col(Column.UTC_TIME).dt.truncate("1h"), maintain_order=True)
         .agg(pl.col(Column.SPOT_PRICE).mean().alias(Column.SPOT_PRICE))
         .with_columns(price_kwh_in_dkk=pl.col(Column.SPOT_PRICE) / 1000 + _SPOT_FEE_DKK)
     )
-    return prices_df
 
 
 def load_prices(
     start: datetime.date, end: datetime.date, force_refresh: bool
 ) -> pl.DataFrame:
-    """Load prices from cache or fetch from API."""
     if force_refresh and PRICES_CACHE_PATH.exists():
         PRICES_CACHE_PATH.unlink()
         st.cache_data.clear()
@@ -78,26 +70,19 @@ def load_prices(
 
 
 def load_consumption(source: Any) -> pl.DataFrame | None:
-    """Load consumption data from CSV."""
-
     if CONSUMPTION_CACHE_PATH.exists():
-        # if selected a new file, clear the cache
         if source is not None:
             CONSUMPTION_CACHE_PATH.unlink()
             st.cache_data.clear()
-        # if no file is selected, load the cached data
         else:
             return pl.read_parquet(CONSUMPTION_CACHE_PATH)
     try:
         consumption_df = pl.read_csv(
             source=source,
             decimal_comma=True,
-            schema={
-                "HourUTC": pl.Datetime,
-                "SpotPriceDKK": pl.Float64,
-            },
+            schema={"HourUTC": pl.Datetime, "SpotPriceDKK": pl.Float64},
         ).rename({"SpotPriceDKK": "consumption_kwh_hourly"})
-    except Exception as _:
+    except Exception:
         consumption_df = (
             pl.read_csv(
                 source=source,
@@ -124,17 +109,14 @@ def main():
     st.set_page_config(page_title="Power Analysis", page_icon="⚡", layout="wide")
     st.title("⚡ Power Consumption Analysis")
 
-    # Sidebar configuration
     st.sidebar.header("Configuration")
 
-    # Consumption data source
     consumption_file = st.sidebar.file_uploader(
         "Consumption CSV File",
         type=["csv"],
         help="Upload the consumption CSV file",
     )
 
-    # Date range
     col1, col2 = st.sidebar.columns(2)
     start_date, end_date = load_state()
     with col1:
@@ -144,18 +126,15 @@ def main():
 
     save_state(start_date, end_date)
 
-    # Force refresh prices
     force_refresh = st.sidebar.button(
         "🔄 Refresh Prices", help="Force re-fetch prices from API"
     )
 
-    # Show cache status
     if PRICES_CACHE_PATH.exists():
         st.sidebar.success("✅ Prices cached")
     else:
         st.sidebar.info("📡 Prices will be fetched")
 
-    # Validate inputs
     if CONSUMPTION_CACHE_PATH.exists():
         st.sidebar.success("✅ Consumption cached")
     else:
@@ -169,7 +148,6 @@ def main():
         st.error("Start date must be before end date")
         return
 
-    # Load data
     try:
         prices_df = load_prices(start_date, end_date, force_refresh)
         consumption_df = load_consumption(consumption_file)
@@ -182,7 +160,6 @@ def main():
         st.error(f"Failed to load data: {e}")
         return
 
-    # Dashboard tabs
     tab1, tab2, tab3, tab4, tab5 = st.tabs(
         [
             "📊 Overview",
@@ -196,7 +173,6 @@ def main():
     with tab1:
         st.header("Price Overview")
 
-        # Monthly average price over time
         monthly_prices = (
             joined_df.group_by(
                 pl.col(Column.TIMESTAMP).dt.truncate("1mo"), maintain_order=True
@@ -215,7 +191,6 @@ def main():
             ]
         )
 
-        # Summary metrics
         col1, col2, col3 = st.columns(3)
         with col1:
             avg_price = joined_df[Column.HOURLY_PRICE].mean()
@@ -259,7 +234,6 @@ def main():
             ]
         )
 
-        # Cost by time of day
         st.subheader("Cost by Time of Day")
         cost_by_event = (
             df_filtered.group_by(FeatureColumn.EVENT_OF_DAY)
@@ -275,7 +249,6 @@ def main():
     with tab3:
         st.header("Consumption Patterns")
 
-        # Hourly consumption pattern
         st.subheader("Average Hourly Consumption by Year")
         hourly_pattern = (
             joined_df.filter(pl.col(Column.HOURLY_CONSUMPTION) > 0)
@@ -296,7 +269,6 @@ def main():
             use_container_width=True,
         )
 
-        # Normalize per year so each year's distribution sums to 1
         st.subheader("Normalized Average Hourly Consumption by Year")
         year_columns = [
             c for c in hourly_pattern.columns if c != FeatureColumn.HOUR_OF_DAY
@@ -346,7 +318,7 @@ def main():
                 ).alias("cost_difference")
             )
         )
-        # Summary metrics
+
         col1, col2, col3 = st.columns(3)
         aligned_df = what_if_df.filter(
             pl.col(Column.FIXED_HOURLY_TOTAL_COST).is_not_null()
@@ -370,7 +342,6 @@ def main():
                 f"{total_cost_difference:,.0f}" if total_cost_difference else "N/A",
             )
 
-        # Summary metrics
         col4, col5, col6 = st.columns(3)
         month_count = aligned_df[FeatureColumn.MONTH_KEY].n_unique()
         year_count = month_count / 12
@@ -465,7 +436,6 @@ def main():
             )
 
         with st.expander("Extreme distributions"):
-
             cost_parameter = st.number_input(
                 "Expensive parameter",
                 value=0.5,

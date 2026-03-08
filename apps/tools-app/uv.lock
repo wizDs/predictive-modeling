@@ -1164,6 +1164,31 @@ wheels = [
 ]
 
 [[package]]
+name = "power-app"
+version = "0.1.0"
+source = { editable = "power-app" }
+dependencies = [
+    { name = "joblib" },
+    { name = "pandas" },
+    { name = "polars" },
+    { name = "pydantic" },
+    { name = "requests" },
+    { name = "seaborn" },
+    { name = "streamlit" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "joblib", specifier = ">=1.5.3" },
+    { name = "pandas", specifier = ">=2.3.3" },
+    { name = "polars", specifier = ">=1.36.1" },
+    { name = "pydantic", specifier = ">=2.12.5" },
+    { name = "requests", specifier = ">=2.32.5" },
+    { name = "seaborn", specifier = ">=0.13.2" },
+    { name = "streamlit", specifier = ">=1.52.1" },
+]
+
+[[package]]
 name = "proto-plus"
 version = "1.27.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1738,6 +1763,7 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "budget" },
+    { name = "power-app" },
 ]
 
 [package.metadata]
@@ -1756,7 +1782,10 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
-dev = [{ name = "budget", editable = "../../src/budget" }]
+dev = [
+    { name = "budget", editable = "../../src/budget" },
+    { name = "power-app", editable = "power-app" },
+]
 
 [[package]]
 name = "torch"

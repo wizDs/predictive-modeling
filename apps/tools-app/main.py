@@ -4,18 +4,32 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-_APPS = Path(__file__).parent.parent
-_PAGES = Path(__file__).parent / "pages"
+_HERE = Path(__file__).parent
 
 pages = {
     "Finance": [
-        st.Page(_APPS / "budget-app" / "app.py", title="Budget", icon="💰", url_path="budget"),
+        st.Page(
+            _HERE / "budget-app" / "app.py",
+            title="Budget",
+            icon="💰",
+            url_path="budget",
+        ),
     ],
     "Energy": [
-        st.Page(_PAGES / "power.py", title="Power Usage", icon="⚡", url_path="power"),
+        st.Page(
+            _HERE / "power-app" / "power-app.py",
+            title="Power Usage",
+            icon="⚡",
+            url_path="power",
+        ),
     ],
     "Tools": [
-        st.Page(_APPS / "transcribe" / "main.py", title="Transcribe", icon="🎙️", url_path="transcribe"),
+        st.Page(
+            _HERE / "transcribe" / "main.py",
+            title="Transcribe",
+            icon="🎙️",
+            url_path="transcribe",
+        ),
     ],
 }
 
