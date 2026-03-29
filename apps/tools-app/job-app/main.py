@@ -119,6 +119,22 @@ st.divider()
 tab_editor, tab_viewer, tab_shell = st.tabs(["✏️ Editor", "🔍 Viewer", "🖥️ Shell"])
 
 with tab_editor:
+    if selected_session == _NEW_SESSION and sessions:
+        with st.expander("Copy content from existing session"):
+            copy_cols = st.columns([2, 1, 1])
+            with copy_cols[0]:
+                copy_source = st.selectbox("Source session", sessions, label_visibility="collapsed")
+            with copy_cols[1]:
+                copy_cv = st.checkbox("CV", value=True)
+            with copy_cols[2]:
+                copy_app = st.checkbox("Application Letter")
+            if st.button("Copy"):
+                if copy_cv:
+                    st.session_state["cv_text"] = _load(copy_source, "cv.tex")
+                if copy_app:
+                    st.session_state["application_text"] = _load(copy_source, "application.tex")
+                st.rerun()
+
     st.subheader("CV")
     cv = st.text_area(
         label="cv", key="cv_text", height=500,
@@ -171,22 +187,64 @@ with tab_viewer:
     saved_application = st.session_state.get("saved_application", "")
     saved_job = st.session_state.get("saved_job", "")
 
-    if not any([saved_cv, saved_job, saved_application]):
-        st.info("Select a saved session above to view its files.")
+    view_mode = st.radio("Mode", ["Single session", "Compare two sessions"], horizontal=True, label_visibility="collapsed")
+
+    if view_mode == "Single session":
+        if not any([saved_cv, saved_job, saved_application]):
+            st.info("Select a saved session above to view its files.")
+        else:
+            sub_cv, sub_job, sub_app = st.tabs(["CV", "Job Posting", "Application Letter"])
+            with sub_cv:
+                st.code(saved_cv, language="latex", line_numbers=True) if saved_cv else st.caption("No CV saved.")
+            with sub_job:
+                st.code(saved_job, language="latex", line_numbers=True) if saved_job else st.caption("No job posting saved.")
+            with sub_app:
+                st.code(saved_application, language="latex", line_numbers=True) if saved_application else st.caption("No application letter saved.")
     else:
-        sub_cv, sub_job, sub_app = st.tabs(["CV", "Job Posting", "Application Letter"])
-        with sub_cv:
-            st.code(saved_cv, language="latex", line_numbers=True) if saved_cv else st.caption("No CV saved.")
-        with sub_job:
-            st.code(saved_job, language="latex", line_numbers=True) if saved_job else st.caption("No job posting saved.")
-        with sub_app:
-            st.code(saved_application, language="latex", line_numbers=True) if saved_application else st.caption("No application letter saved.")
+        all_files = {s: list(((_DATA / s)).iterdir()) for s in sessions}
+        cmp_cols = st.columns(2)
+        with cmp_cols[0]:
+            cmp_a = st.selectbox("Session A", ["— pick —"] + sessions, key="cmp_a")
+        with cmp_cols[1]:
+            cmp_b = st.selectbox("Session B", ["— pick —"] + sessions, key="cmp_b")
+
+        if cmp_a != "— pick —" and cmp_b != "— pick —":
+            all_filenames = sorted({f.name for s in [cmp_a, cmp_b] for f in (_DATA / s).iterdir() if f.is_file()})
+            for fname in all_filenames:
+                path_a = _DATA / cmp_a / fname
+                path_b = _DATA / cmp_b / fname
+                text_a = path_a.read_text(encoding="utf-8") if path_a.exists() else ""
+                text_b = path_b.read_text(encoding="utf-8") if path_b.exists() else ""
+                diff_lines = list(difflib.unified_diff(
+                    text_a.splitlines(keepends=True),
+                    text_b.splitlines(keepends=True),
+                    fromfile=f"{cmp_a}/{fname}",
+                    tofile=f"{cmp_b}/{fname}",
+                ))
+                n_changed = sum(1 for l in diff_lines if l.startswith(("+ ", "- ")))
+                label = f"{fname} — {'no differences' if not diff_lines else f'{n_changed} changed lines'}"
+                with st.expander(label, expanded=bool(diff_lines)):
+                    if diff_lines:
+                        st.code("".join(diff_lines), language="diff")
+                    else:
+                        st.caption("Files are identical.")
 
 _FILE_LABELS = {"cv.tex": "CV", "application.tex": "Application Letter", "job_posting.tex": "Job Posting"}
+_OUTPUT_FILE_LABELS = {
+    "cv_response.tex": "CV (response)",
+    "application_response.tex": "Application Letter (response)",
+    "cv.tex": "CV (overwrite)",
+    "application.tex": "Application Letter (overwrite)",
+    "job_posting.tex": "Job Posting (overwrite)",
+}
 
 with tab_shell:
     if "claude_history" not in st.session_state:
         st.session_state.claude_history = []
+
+    if st.button("↺ Restart shell", help="Reload Claude with the current list of sessions"):
+        st.session_state.claude_history = []
+        st.rerun()
 
     # --- Input / Output file pickers ---
     io_cols = st.columns(2)
@@ -200,7 +258,7 @@ with tab_shell:
         st.caption("Output file (save Claude's last reply)")
         out_sessions = ["— new session —"] + sessions
         out_session = st.selectbox("Output session", out_sessions, key="out_session", label_visibility="collapsed")
-        out_file = st.selectbox("Output file", list(_FILE_LABELS.keys()), format_func=_FILE_LABELS.get, key="out_file", label_visibility="collapsed")
+        out_file = st.selectbox("Output file", list(_OUTPUT_FILE_LABELS.keys()), format_func=_OUTPUT_FILE_LABELS.get, key="out_file", label_visibility="collapsed")
         out_name = ""
         if out_session == "— new session —":
             out_name = st.text_input("New session name", placeholder="e.g. company-role-2024", key="out_name", label_visibility="collapsed")
@@ -259,10 +317,17 @@ with tab_shell:
     if last_reply:
         target_session = out_name.strip() if out_session == "— new session —" else out_session
         save_disabled = not target_session
-        if st.button(f"💾 Save reply → {target_session or '…'}/{_FILE_LABELS[out_file]}", disabled=save_disabled):
+        if st.button(f"💾 Save reply → {target_session or '…'}/{_OUTPUT_FILE_LABELS[out_file]}", disabled=save_disabled):
             out_dir = _DATA / target_session
             out_dir.mkdir(parents=True, exist_ok=True)
-            (out_dir / out_file).write_text(last_reply, encoding="utf-8")
+            out_path = out_dir / out_file
+            if out_file in ("cv_response.tex", "application_response.tex"):
+                with out_path.open("a", encoding="utf-8") as f:
+                    if out_path.stat().st_size > 0 if out_path.exists() else False:
+                        f.write("\n\n% ---\n\n")
+                    f.write(last_reply)
+            else:
+                out_path.write_text(last_reply, encoding="utf-8")
             st.success(f"Saved to data/{target_session}/{out_file}")
 
     # --- Diff: input file vs last reply ---
