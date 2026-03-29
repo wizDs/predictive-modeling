@@ -203,8 +203,9 @@ with tab_viewer:
     else:
         all_files = {s: list(((_DATA / s)).iterdir()) for s in sessions}
         cmp_cols = st.columns(2)
+        default_a = sessions.index(selected_session) + 1 if selected_session != _NEW_SESSION and selected_session in sessions else 0
         with cmp_cols[0]:
-            cmp_a = st.selectbox("Session A", ["— pick —"] + sessions, key="cmp_a")
+            cmp_a = st.selectbox("Session A", ["— pick —"] + sessions, index=default_a, key="cmp_a")
         with cmp_cols[1]:
             cmp_b = st.selectbox("Session B", ["— pick —"] + sessions, key="cmp_b")
 
