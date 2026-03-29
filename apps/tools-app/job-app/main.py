@@ -232,11 +232,9 @@ with tab_viewer:
 
 _FILE_LABELS = {"cv.tex": "CV", "application.tex": "Application Letter", "job_posting.tex": "Job Posting"}
 _OUTPUT_FILE_LABELS = {
-    "cv_response.tex": "CV (response)",
-    "application_response.tex": "Application Letter (response)",
-    "cv.tex": "CV (overwrite)",
-    "application.tex": "Application Letter (overwrite)",
-    "job_posting.tex": "Job Posting (overwrite)",
+    "cv.tex": "CV",
+    "application.tex": "Application Letter",
+    "job_posting.tex": "Job Posting",
 }
 
 with tab_shell:
@@ -321,14 +319,7 @@ with tab_shell:
         if st.button(f"💾 Save reply → {target_session or '…'}/{_OUTPUT_FILE_LABELS[out_file]}", disabled=save_disabled):
             out_dir = _DATA / target_session
             out_dir.mkdir(parents=True, exist_ok=True)
-            out_path = out_dir / out_file
-            if out_file in ("cv_response.tex", "application_response.tex"):
-                with out_path.open("a", encoding="utf-8") as f:
-                    if out_path.stat().st_size > 0 if out_path.exists() else False:
-                        f.write("\n\n% ---\n\n")
-                    f.write(last_reply)
-            else:
-                out_path.write_text(last_reply, encoding="utf-8")
+            (out_dir / out_file).write_text(last_reply, encoding="utf-8")
             st.success(f"Saved to data/{target_session}/{out_file}")
 
     # --- Diff: input file vs output file ---
