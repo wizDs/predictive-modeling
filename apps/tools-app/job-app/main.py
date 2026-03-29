@@ -331,18 +331,19 @@ with tab_shell:
                 out_path.write_text(last_reply, encoding="utf-8")
             st.success(f"Saved to data/{target_session}/{out_file}")
 
-    # --- Diff: input file vs last reply ---
-    if last_reply and in_session != "— none —":
+    # --- Diff: input file vs output file ---
+    if in_session != "— none —":
         input_path = _DATA / in_session / in_file
-        if input_path.exists():
+        out_target_session = out_name.strip() if out_session == "— new session —" else out_session
+        output_path = _DATA / out_target_session / out_file if out_target_session else None
+        if input_path.exists() and output_path and output_path.exists():
             st.divider()
-            st.subheader("Diff — input vs last reply")
-            original = input_path.read_text(encoding="utf-8").splitlines(keepends=True)
-            revised = last_reply.splitlines(keepends=True)
+            st.subheader("Diff — input vs output")
             diff_lines = list(difflib.unified_diff(
-                original, revised,
+                input_path.read_text(encoding="utf-8").splitlines(keepends=True),
+                output_path.read_text(encoding="utf-8").splitlines(keepends=True),
                 fromfile=f"{in_session}/{in_file}",
-                tofile="Claude reply",
+                tofile=f"{out_target_session}/{out_file}",
             ))
             if diff_lines:
                 st.code("".join(diff_lines), language="diff")
