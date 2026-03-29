@@ -1,3 +1,4 @@
+import difflib
 import re
 import shutil
 import subprocess
@@ -34,15 +35,23 @@ def _anonymize_application(text: str) -> str:
     return text
 
 
-def _run_claude(prompt: str) -> str:
+def _run_claude(prompt: str, output_path: Path | None = None) -> str:
+    write_instruction = (
+        f"When writing files, ONLY write to {output_path}. "
+        "Never modify the files you read from — treat them as read-only source material."
+        if output_path else
+        "Do not write or modify any files unless explicitly asked."
+    )
     system = (
         "You are a job application assistant. "
         f"The working directory is {_DATA}, which contains session subfolders "
         "each with cv.tex, application.tex, and job_posting.tex. "
-        "Help the user craft, review, and improve their job applications."
+        "Help the user craft, review, and improve their job applications. "
+        + write_instruction
     )
     result = subprocess.run(
-        [_CLAUDE, "-p", prompt, "--system-prompt", system, "--add-dir", str(_DATA)],
+        [_CLAUDE, "-p", prompt, "--system-prompt", system, "--add-dir", str(_DATA),
+         "--allowedTools", "Edit", "Write", "Read", "Bash"],
         cwd=_DATA,
         capture_output=True,
         text=True,
@@ -236,7 +245,12 @@ with tab_shell:
                     if input_path.exists():
                         input_ctx = f"Context from {in_session}/{in_file}:\n```\n{input_path.read_text(encoding='utf-8')}\n```\n\n"
                 full_prompt = f"{history_ctx}\nUser: {input_ctx}{user_input}" if history_ctx else f"{input_ctx}{user_input}"
-                reply = _run_claude(full_prompt)
+                out_target = None
+                if out_session != "— new session —" and out_session:
+                    out_target = _DATA / out_session / out_file
+                elif out_name.strip():
+                    out_target = _DATA / out_name.strip() / out_file
+                reply = _run_claude(full_prompt, output_path=out_target)
             st.markdown(reply)
         st.session_state.claude_history.append(("assistant", reply))
 
@@ -250,3 +264,21 @@ with tab_shell:
             out_dir.mkdir(parents=True, exist_ok=True)
             (out_dir / out_file).write_text(last_reply, encoding="utf-8")
             st.success(f"Saved to data/{target_session}/{out_file}")
+
+    # --- Diff: input file vs last reply ---
+    if last_reply and in_session != "— none —":
+        input_path = _DATA / in_session / in_file
+        if input_path.exists():
+            st.divider()
+            st.subheader("Diff — input vs last reply")
+            original = input_path.read_text(encoding="utf-8").splitlines(keepends=True)
+            revised = last_reply.splitlines(keepends=True)
+            diff_lines = list(difflib.unified_diff(
+                original, revised,
+                fromfile=f"{in_session}/{in_file}",
+                tofile="Claude reply",
+            ))
+            if diff_lines:
+                st.code("".join(diff_lines), language="diff")
+            else:
+                st.caption("No differences.")
