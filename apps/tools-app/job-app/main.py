@@ -173,9 +173,30 @@ with tab_viewer:
         with sub_app:
             st.code(saved_application, language="latex", line_numbers=True) if saved_application else st.caption("No application letter saved.")
 
+_FILE_LABELS = {"cv.tex": "CV", "application.tex": "Application Letter", "job_posting.tex": "Job Posting"}
+
 with tab_shell:
     if "claude_history" not in st.session_state:
         st.session_state.claude_history = []
+
+    # --- Input / Output file pickers ---
+    io_cols = st.columns(2)
+    with io_cols[0]:
+        st.caption("Input file (context for Claude)")
+        in_sessions = ["— none —"] + sessions
+        in_session = st.selectbox("Input session", in_sessions, key="in_session", label_visibility="collapsed")
+        in_file = st.selectbox("Input file", list(_FILE_LABELS.keys()), format_func=_FILE_LABELS.get, key="in_file", label_visibility="collapsed")
+
+    with io_cols[1]:
+        st.caption("Output file (save Claude's last reply)")
+        out_sessions = ["— new session —"] + sessions
+        out_session = st.selectbox("Output session", out_sessions, key="out_session", label_visibility="collapsed")
+        out_file = st.selectbox("Output file", list(_FILE_LABELS.keys()), format_func=_FILE_LABELS.get, key="out_file", label_visibility="collapsed")
+        out_name = ""
+        if out_session == "— new session —":
+            out_name = st.text_input("New session name", placeholder="e.g. company-role-2024", key="out_name", label_visibility="collapsed")
+
+    st.divider()
 
     if not st.session_state.claude_history:
         with st.spinner("Starting Claude…"):
@@ -208,7 +229,24 @@ with tab_shell:
                 history_ctx = "\n".join(
                     f"{'User' if r == 'user' else 'Assistant'}: {m}" for r, m in recent
                 )
-                full_prompt = f"{history_ctx}\nUser: {user_input}" if history_ctx else user_input
+                # Prepend input file content if selected
+                input_ctx = ""
+                if in_session != "— none —":
+                    input_path = _DATA / in_session / in_file
+                    if input_path.exists():
+                        input_ctx = f"Context from {in_session}/{in_file}:\n```\n{input_path.read_text(encoding='utf-8')}\n```\n\n"
+                full_prompt = f"{history_ctx}\nUser: {input_ctx}{user_input}" if history_ctx else f"{input_ctx}{user_input}"
                 reply = _run_claude(full_prompt)
             st.markdown(reply)
         st.session_state.claude_history.append(("assistant", reply))
+
+    # --- Save last reply to output file ---
+    last_reply = next((m for r, m in reversed(st.session_state.claude_history) if r == "assistant"), None)
+    if last_reply:
+        target_session = out_name.strip() if out_session == "— new session —" else out_session
+        save_disabled = not target_session
+        if st.button(f"💾 Save reply → {target_session or '…'}/{_FILE_LABELS[out_file]}", disabled=save_disabled):
+            out_dir = _DATA / target_session
+            out_dir.mkdir(parents=True, exist_ok=True)
+            (out_dir / out_file).write_text(last_reply, encoding="utf-8")
+            st.success(f"Saved to data/{target_session}/{out_file}")
