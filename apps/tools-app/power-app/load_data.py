@@ -15,7 +15,8 @@ _LIMIT = 1000
 """Maximum number of records per request"""
 V1_DEPRECATED = datetime.date(2025, 10, 1)
 MAX_WORKERS = 4
-_SPOT_FEE_DKK = 0.12
+_SPOT_FEE_DKK = 0.145
+MOMS = 1.25
 
 
 class Column(enum.StrEnum):
@@ -147,7 +148,8 @@ class EnergyDataClient:
                             "HourUTC": item["TimeUTC"],
                             "HourDK": item["TimeDK"],
                             "PriceArea": item["PriceArea"],
-                            "SpotPriceDKK": item["DayAheadPriceDKK"],
+                            "SpotPriceDKK": (item["DayAheadPriceDKK"] + _SPOT_FEE_DKK)
+                            * MOMS,
                         }
                     )
                     for item in records
@@ -516,7 +518,7 @@ if __name__ == "__main__":
         pl.DataFrame(prices)
         .group_by(pl.col("HourUTC").dt.truncate("1h"), maintain_order=True)
         .agg(pl.col("SpotPriceDKK").mean().alias("SpotPriceDKK"))
-        .with_columns(price_kwh_in_dkk=pl.col("SpotPriceDKK") / 1000 + _SPOT_FEE_DKK)
+        .with_columns(price_kwh_in_dkk=pl.col("SpotPriceDKK") / 1000)
     )
     # Load consumption data
     consumption_df: pl.DataFrame = pl.read_csv(

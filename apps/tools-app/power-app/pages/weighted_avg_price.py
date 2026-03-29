@@ -50,7 +50,9 @@ def render(joined_df: pl.DataFrame, prices_monthly_df: pl.DataFrame) -> None:
     )
 
     df_plot = (
-        monthly_cost.select(FeatureColumn.MONTH_KEY, "weighted_cost_kwh", Column.FIXED_HOURLY_PRICE)
+        monthly_cost.select(
+            FeatureColumn.MONTH_KEY, "weighted_cost_kwh", Column.FIXED_HOURLY_PRICE
+        )
         .to_pandas()
         .melt(id_vars=FeatureColumn.MONTH_KEY, var_name="type", value_name="price")
     )
