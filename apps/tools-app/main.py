@@ -9,6 +9,14 @@ st.set_page_config(layout="wide")
 _HERE = Path(__file__).parent
 
 pages = {
+    "Skat": [
+        st.Page(
+            _HERE / "transport-fradrag" / "main.py",
+            title="Transport Fradrag",
+            icon="🚌",
+            url_path="transport-fradrag",
+        ),
+    ],
     "Finance": [
         st.Page(
             _HERE / "budget-app" / "app.py",
