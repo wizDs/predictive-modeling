@@ -2,8 +2,22 @@ import difflib
 import re
 import shutil
 import subprocess
+from collections import Counter
 from pathlib import Path
 import streamlit as st
+
+from wiz.job_app_backend import MODEL_DIR, predict, highlight_html, LABEL_COLOURS, load_model
+
+
+@st.cache_resource
+def _load_skill_model():
+    return load_model()
+
+
+@st.cache_data
+def _predict_skills(text: str) -> list[dict]:
+    _load_skill_model()  # ensure model is cached
+    return predict(text)
 
 _HERE = Path(__file__).parent
 _DATA = _HERE / "data"
@@ -198,9 +212,34 @@ with tab_viewer:
                 st.code(saved_cv, language="latex", line_numbers=True) if saved_cv else st.caption("No CV saved.")
             with sub_job:
                 if saved_job:
-                    job_view = st.toggle("Rendered", value=True, key="job_rendered")
+                    view_cols = st.columns(2)
+                    with view_cols[0]:
+                        job_view = st.toggle("Rendered", value=True, key="job_rendered")
+                    with view_cols[1]:
+                        _has_model = MODEL_DIR.exists()
+                        skill_hl = st.toggle(
+                            "Highlight skills",
+                            value=_has_model,
+                            disabled=not _has_model,
+                            key="skill_highlight",
+                            help="Train the model first: `python train_model.py`" if not _has_model else None,
+                        )
                     if job_view:
-                        st.markdown(saved_job)
+                        if skill_hl and _has_model:
+                            entities = _predict_skills(saved_job)
+                            html = highlight_html(saved_job, entities)
+                            legend = " ".join(
+                                f'<span style="background:{c};padding:1px 6px;border-radius:3px;margin-right:6px;">{lbl}</span>'
+                                for lbl, c in LABEL_COLOURS.items()
+                            )
+                            st.markdown(legend, unsafe_allow_html=True)
+                            st.markdown(html, unsafe_allow_html=True)
+                            counts = Counter((e["label"], e["text"]) for e in entities)
+                            with st.expander(f"Detected skills ({len(entities)})"):
+                                for (label, text), n in counts.most_common():
+                                    st.write(f"**{label}** — {text}" + (f" ×{n}" if n > 1 else ""))
+                        else:
+                            st.markdown(saved_job)
                     else:
                         st.code(saved_job, language="latex", line_numbers=True)
                 else:
@@ -238,11 +277,6 @@ with tab_viewer:
                         st.caption("Files are identical.")
 
 _FILE_LABELS = {"cv.tex": "CV", "application.tex": "Application Letter", "job_posting.tex": "Job Posting"}
-_OUTPUT_FILE_LABELS = {
-    "cv.tex": "CV",
-    "application.tex": "Application Letter",
-    "job_posting.tex": "Job Posting",
-}
 
 with tab_shell:
     if "claude_history" not in st.session_state:
@@ -264,7 +298,7 @@ with tab_shell:
         st.caption("Output file (save Claude's last reply)")
         out_sessions = ["— new session —"] + sessions
         out_session = st.selectbox("Output session", out_sessions, key="out_session", label_visibility="collapsed")
-        out_file = st.selectbox("Output file", list(_OUTPUT_FILE_LABELS.keys()), format_func=_OUTPUT_FILE_LABELS.get, key="out_file", label_visibility="collapsed")
+        out_file = st.selectbox("Output file", list(_FILE_LABELS.keys()), format_func=_FILE_LABELS.get, key="out_file", label_visibility="collapsed")
         out_name = ""
         if out_session == "— new session —":
             out_name = st.text_input("New session name", placeholder="e.g. company-role-2024", key="out_name", label_visibility="collapsed")
@@ -323,7 +357,7 @@ with tab_shell:
     if last_reply:
         target_session = out_name.strip() if out_session == "— new session —" else out_session
         save_disabled = not target_session
-        if st.button(f"💾 Save reply → {target_session or '…'}/{_OUTPUT_FILE_LABELS[out_file]}", disabled=save_disabled):
+        if st.button(f"💾 Save reply → {target_session or '…'}/{_FILE_LABELS[out_file]}", disabled=save_disabled):
             out_dir = _DATA / target_session
             out_dir.mkdir(parents=True, exist_ok=True)
             (out_dir / out_file).write_text(last_reply, encoding="utf-8")
