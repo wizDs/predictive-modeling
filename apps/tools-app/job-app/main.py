@@ -197,7 +197,14 @@ with tab_viewer:
             with sub_cv:
                 st.code(saved_cv, language="latex", line_numbers=True) if saved_cv else st.caption("No CV saved.")
             with sub_job:
-                st.code(saved_job, language="latex", line_numbers=True) if saved_job else st.caption("No job posting saved.")
+                if saved_job:
+                    job_view = st.toggle("Rendered", value=True, key="job_rendered")
+                    if job_view:
+                        st.markdown(saved_job)
+                    else:
+                        st.code(saved_job, language="latex", line_numbers=True)
+                else:
+                    st.caption("No job posting saved.")
             with sub_app:
                 st.code(saved_application, language="latex", line_numbers=True) if saved_application else st.caption("No application letter saved.")
     else:
