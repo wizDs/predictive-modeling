@@ -6,7 +6,10 @@ from collections import Counter
 from pathlib import Path
 import streamlit as st
 
-from wiz.job_app_backend import MODEL_DIR, predict, highlight_html, LABEL_COLOURS, load_model
+from wiz.job_app_backend import MODEL_DIR, predict, highlight_html, LABEL_COLOURS, load_model, skill_llm
+
+_BACKEND_SPACY = "spaCy NER"
+_BACKEND_LLM = f"LLM ({skill_llm.DEFAULT_MODEL})"
 
 
 @st.cache_resource
@@ -15,9 +18,25 @@ def _load_skill_model():
 
 
 @st.cache_data
-def _predict_skills(text: str) -> list[dict]:
-    _load_skill_model()  # ensure model is cached
+def _predict_skills_spacy(text: str) -> list[dict]:
+    _load_skill_model()
     return predict(text)
+
+
+@st.cache_data(ttl=300)
+def _predict_skills_llm(text: str) -> list[dict]:
+    return skill_llm.predict(text)
+
+
+@st.cache_data(ttl=30)
+def _llm_available() -> bool:
+    return skill_llm.is_available()
+
+
+_BACKEND_DISPATCH = {
+    _BACKEND_SPACY: _predict_skills_spacy,
+    _BACKEND_LLM: _predict_skills_llm,
+}
 
 _HERE = Path(__file__).parent
 _DATA = _HERE / "data"
@@ -212,21 +231,33 @@ with tab_viewer:
                 st.code(saved_cv, language="latex", line_numbers=True) if saved_cv else st.caption("No CV saved.")
             with sub_job:
                 if saved_job:
-                    view_cols = st.columns(2)
-                    with view_cols[0]:
+                    _backends = []
+                    if MODEL_DIR.exists():
+                        _backends.append(_BACKEND_SPACY)
+                    if _llm_available():
+                        _backends.append(_BACKEND_LLM)
+
+                    ctrl_cols = st.columns(3)
+                    with ctrl_cols[0]:
                         job_view = st.toggle("Rendered", value=True, key="job_rendered")
-                    with view_cols[1]:
-                        _has_model = MODEL_DIR.exists()
+                    with ctrl_cols[1]:
                         skill_hl = st.toggle(
                             "Highlight skills",
-                            value=_has_model,
-                            disabled=not _has_model,
+                            value=bool(_backends),
+                            disabled=not _backends,
                             key="skill_highlight",
-                            help="Train the model first: `python train_model.py`" if not _has_model else None,
+                        )
+                    with ctrl_cols[2]:
+                        backend = st.selectbox(
+                            "Backend",
+                            _backends or ["—"],
+                            disabled=not _backends or not skill_hl,
+                            key="skill_backend",
+                            label_visibility="collapsed",
                         )
                     if job_view:
-                        if skill_hl and _has_model:
-                            entities = _predict_skills(saved_job)
+                        if skill_hl and _backends:
+                            entities = _BACKEND_DISPATCH[backend](saved_job)
                             html = highlight_html(saved_job, entities)
                             legend = " ".join(
                                 f'<span style="background:{c};padding:1px 6px;border-radius:3px;margin-right:6px;">{lbl}</span>'
@@ -247,7 +278,6 @@ with tab_viewer:
             with sub_app:
                 st.code(saved_application, language="latex", line_numbers=True) if saved_application else st.caption("No application letter saved.")
     else:
-        all_files = {s: list(((_DATA / s)).iterdir()) for s in sessions}
         cmp_cols = st.columns(2)
         default_a = sessions.index(selected_session) + 1 if selected_session != _NEW_SESSION and selected_session in sessions else 0
         with cmp_cols[0]:

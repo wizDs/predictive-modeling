@@ -9,3 +9,4 @@ from .skill_model import (
     predict,
     train,
 )
+from . import skill_llm
