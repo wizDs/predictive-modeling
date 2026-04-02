@@ -29,61 +29,149 @@ MODEL_DIR = _HERE / "skill_ner_model"
 TAXONOMY: dict[str, list[str]] = {
     "TECH": [
         # Languages
-        "Python", "SQL", "SAS", "Java", "R", "Scala", "Go", "Rust",
-        "JavaScript", "TypeScript", "C++", "C#", "Julia",
+        "Python",
+        "SQL",
+        "SAS",
+        "Java",
+        "R",
+        "Scala",
+        "Rust",
+        "JavaScript",
+        "TypeScript",
+        "C++",
+        "C#",
+        "Julia",
         # Methodologies / practices
-        "DevOps", "MLOps", "CI/CD", "CI / CD", "DataOps",
-        "machine learning", "deep learning", "reinforcement learning",
-        "natural language processing", "NLP", "computer vision",
-        "Generative AI", "GenAI", "LLM", "large language model",
-        "AI/ML", "AI / ML", "AI", "ML",
-        "data engineering", "data science", "data analytics",
-        "containerisation", "containerization", "microservices",
-        "event-driven", "event-based", "REST", "API",
-        "GPU", "CUDA",
+        "DevOps",
+        "MLOps",
+        "CI/CD",
+        "CI / CD",
+        "DataOps",
+        "machine learning",
+        "deep learning",
+        "reinforcement learning",
+        "natural language processing",
+        "NLP",
+        "computer vision",
+        "Generative AI",
+        "GenAI",
+        "LLM",
+        "large language model",
+        "AI/ML",
+        "AI / ML",
+        "AI",
+        "ML",
+        "data engineering",
+        "data science",
+        "data analytics",
+        "containerisation",
+        "containerization",
+        "microservices",
+        "event-driven",
+        "event-based",
+        "REST",
+        "API",
+        "GPU",
+        "CUDA",
         # Danish equivalents
-        "kunstig intelligens", "maskinlæring", "machine learning modeller",
+        "kunstig intelligens",
+        "maskinlæring",
+        "machine learning modeller",
     ],
     "TOOL": [
-        "Azure", "AWS", "GCP", "Google Cloud",
-        "GCP Vertex AI", "Vertex AI", "GCP BigQuery", "BigQuery",
-        "Airflow", "Apache Airflow", "Apache NiFi",
-        "Docker", "Kubernetes", "Ansible", "Terraform",
-        "Grafana", "HAProxy", "OpenSearch", "Elasticsearch",
-        "FastAPI", "vLLM", "Hugging Face", "HuggingFace",
-        "Linux", "Git", "GitHub", "GitLab",
-        "Spark", "Databricks", "dbt", "Snowflake", "Redshift",
-        "PostgreSQL", "MongoDB", "Redis",
-        "TensorFlow", "PyTorch", "scikit-learn", "spaCy", "pandas",
+        "Azure",
+        "AWS",
+        "GCP",
+        "Google Cloud",
+        "GCP Vertex AI",
+        "Vertex AI",
+        "GCP BigQuery",
+        "BigQuery",
+        "Airflow",
+        "Apache Airflow",
+        "Apache NiFi",
+        "Docker",
+        "Kubernetes",
+        "Ansible",
+        "Terraform",
+        "Grafana",
+        "HAProxy",
+        "OpenSearch",
+        "Elasticsearch",
+        "FastAPI",
+        "vLLM",
+        "Hugging Face",
+        "HuggingFace",
+        "Linux",
+        "Git",
+        "GitHub",
+        "GitLab",
+        "Spark",
+        "Databricks",
+        "dbt",
+        "Snowflake",
+        "Redshift",
+        "PostgreSQL",
+        "MongoDB",
+        "Redis",
+        "TensorFlow",
+        "PyTorch",
+        "scikit-learn",
+        "spaCy",
+        "pandas",
         "Raspberry Pi",
     ],
     "DOMAIN": [
-        "risk management", "financial risk", "trading",
-        "recommendation systems", "recommender systems",
-        "sentiment analysis", "topic modeling", "topic modelling",
-        "content generation", "personalisation", "personalization",
-        "forecasting", "trend analysis", "ranking",
-        "search", "information retrieval",
-        "security", "cybersecurity", "intelligence",
-        "efterretning", "spionage", "terror",
+        "fraud",
+        "risk management",
+        "financial risk",
+        "trading",
+        "recommendation systems",
+        "recommender systems",
+        "sentiment analysis",
+        "topic modeling",
+        "topic modelling",
+        "content generation",
+        "personalisation",
+        "personalization",
+        "forecasting",
+        "trend analysis",
+        "ranking",
+        "search",
+        "information retrieval",
+        "security",
+        "cybersecurity",
+        "intelligence",
+        "efterretning",
+        "spionage",
+        "terror",
     ],
     "SOFT": [
-        "collaboration", "teamwork", "stakeholder engagement",
-        "communication", "problem solving", "problem-solving",
-        "leadership", "mentoring", "coaching",
-        "samarbejde", "videndeling", "sparring",
-        "helhedsorienteret", "samarbejdsorienteret",
+        "collaboration",
+        "teamwork",
+        "stakeholder engagement",
+        "communication",
+        "problem solving",
+        "problem-solving",
+        "leadership",
+        "mentoring",
+        "coaching",
+        "samarbejde",
+        "videndeling",
+        "sparring",
+        "helhedsorienteret",
+        "samarbejdsorienteret",
     ],
 }
 
 _LABEL_BY_PHRASE: dict[str, str] = {
-    phrase.lower(): label
-    for label, phrases in TAXONOMY.items()
-    for phrase in phrases
+    phrase.lower(): label for label, phrases in TAXONOMY.items() for phrase in phrases
 }
 
 
-def _find_spans(text: str, nlp: spacy.Language | None = None) -> list[tuple[int, int, str]]:
+def _find_spans(
+    text: str, nlp: spacy.Language | None = None
+) -> list[tuple[int, int, str]]:
     """Return (start, end, label) spans found via taxonomy phrase matching.
 
     When *nlp* is given the spans are snapped to token boundaries so they
@@ -119,7 +207,9 @@ def annotate_text(text: str, nlp: spacy.Language | None = None) -> dict:
     return {"text": text, "entities": spans}
 
 
-def annotate_files(paths: Iterable[Path], nlp: spacy.Language | None = None) -> list[dict]:
+def annotate_files(
+    paths: Iterable[Path], nlp: spacy.Language | None = None
+) -> list[dict]:
     """Annotate multiple files and return training dicts."""
     if nlp is None:
         nlp = spacy.blank("xx")
@@ -181,16 +271,21 @@ def predict(text: str) -> list[dict]:
     nlp = load_model()
     doc = nlp(text)
     return [
-        {"start": ent.start_char, "end": ent.end_char, "label": ent.label_, "text": ent.text}
+        {
+            "start": ent.start_char,
+            "end": ent.end_char,
+            "label": ent.label_,
+            "text": ent.text,
+        }
         for ent in doc.ents
     ]
 
 
 LABEL_COLOURS = {
-    "TECH":   "#4dabf7",  # blue
-    "TOOL":   "#69db7c",  # green
+    "TECH": "#4dabf7",  # blue
+    "TOOL": "#69db7c",  # green
     "DOMAIN": "#ffd43b",  # yellow
-    "SOFT":   "#da77f2",  # purple
+    "SOFT": "#da77f2",  # purple
 }
 
 
@@ -203,7 +298,9 @@ def highlight_html(text: str, entities: list[dict]) -> str:
         s, e = ent["start"], ent["end"]
         colour = LABEL_COLOURS.get(ent["label"], "#adb5bd")
         parts.append(text[prev:s])
-        parts.append(f'<mark style="background:{colour};padding:1px 4px;border-radius:3px;" title="{ent["label"]}">')
+        parts.append(
+            f'<mark style="background:{colour};padding:1px 4px;border-radius:3px;" title="{ent["label"]}">'
+        )
         parts.append(text[s:e])
         parts.append("</mark>")
         prev = e
