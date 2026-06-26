@@ -23,7 +23,7 @@ class LGBMClassifier(estimator.BinaryClassifier):
     def predict_proba(self, features: FeatureArray) -> np.ndarray:
         return self.clf.predict_proba(features)
 
-    def feature_importance(self, features: FeatureArray) -> Mapping[str, float]:
+    def feature_importance(self, features: FeatureArray) -> Mapping[str, float] | None:
         # https://stackoverflow.com/questions/37627923/how-to-get-feature-importance-in-xgboost
         return None  # self.clf_booster.get_score(importance_type="gain")
 
@@ -40,6 +40,6 @@ class LGBMRegressor(estimator.Regressor):
     def _predict(self, features: np.ndarray) -> np.ndarray:
         return self.clf.predict(features)
 
-    def feature_importance(self):
+    def feature_importance(self, features: FeatureArray) -> Mapping[str, float] | None:
         # https://stackoverflow.com/questions/37627923/how-to-get-feature-importance-in-xgboost
         return None  # self.clf_booster.get_score(importance_type="gain")

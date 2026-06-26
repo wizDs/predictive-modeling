@@ -15,7 +15,7 @@ def _get_google_sheet_data(
     api_key: str,
     column_start: str = COLUMN_START,
     column_end: str = COLUMN_END,
-) -> Sequence[schemas.Payment]:
+) -> dict[str, list[list[str]]]:
     """Gets payment data from Google Sheet and returns sequence of Payment objects."""
     # Construct the URL for the Google Sheets API
     base_url = "https://sheets.googleapis.com/v4/spreadsheets"
@@ -52,13 +52,13 @@ def get_payment_data(
 
     try:
         rows = data["values"]
-        _ = rows.pop(0)
+        rows.pop(0)
         _rows = []
         for row in rows:
             try:
                 d = dict(zip(schemas.Payment.model_fields, row))
                 p = schemas.Payment.model_validate(d)
-                _rows += [p]
+                _rows.append(p)
             except Exception as e:
                 _row = dict(zip(schemas.Payment.model_fields, row))
                 raise RuntimeError(_row) from e
@@ -66,7 +66,6 @@ def get_payment_data(
         return _rows
 
     except requests.exceptions.RequestException as e:
-        # Handle any errors that occur during the request
         raise RuntimeError(f"An error occurred: {e}") from e
 
 
@@ -89,13 +88,13 @@ def get_income_data(
 
     try:
         rows = data["values"]
-        _ = rows.pop(0)
+        rows.pop(0)
         _rows = []
         for row in rows:
             try:
                 d = dict(zip(schemas.Payment.model_fields, row))
                 p = schemas.Payment.model_validate(d)
-                _rows += [p]
+                _rows.append(p)
             except Exception as e:
                 _row = dict(zip(schemas.Record.model_fields, row))
                 raise RuntimeError(_row) from e
@@ -103,5 +102,4 @@ def get_income_data(
         return _rows
 
     except requests.exceptions.RequestException as e:
-        # Handle any errors that occur during the request
         raise RuntimeError(f"An error occurred: {e}") from e

@@ -21,7 +21,7 @@ class XGBoostClassifier(BinaryClassifier):
     def _predict(self, features: np.ndarray) -> np.ndarray:
         return self.clf.predict(features)
 
-    def feature_importance(self, features: FeatureArray) -> Mapping[str, float]:
+    def feature_importance(self, features: FeatureArray) -> Mapping[str, float] | None:
         # https://stackoverflow.com/questions/37627923/how-to-get-feature-importance-in-xgboost
         return self.clf_booster.get_score(importance_type="gain")
 
@@ -44,6 +44,6 @@ class XGBoostRegressor(Regressor):
     def _predict(self, features: np.ndarray) -> np.ndarray:
         return self.clf.predict(features)
 
-    def feature_importance(self):
+    def feature_importance(self, features: FeatureArray) -> Mapping[str, float] | None:
         # https://stackoverflow.com/questions/37627923/how-to-get-feature-importance-in-xgboost
         return self.clf_booster.get_score(importance_type="gain")

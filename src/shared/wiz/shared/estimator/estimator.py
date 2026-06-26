@@ -2,10 +2,7 @@ import abc
 from typing import Mapping, final
 import numpy as np
 from wiz.evaluation import metric  # type: ignore
-
-
-DoubleArray = np.typing.ArrayLike
-FeatureArray = np.typing.NDArray[np.float64]
+from wiz.interface.feature_array import DoubleArray, FeatureArray
 
 
 class BaseEstimator(abc.ABC):

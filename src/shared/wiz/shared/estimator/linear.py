@@ -20,5 +20,5 @@ class LinearModel(Regressor):
     def _predict(self, features: np.ndarray) -> np.ndarray:
         return self.clf.predict(features)
 
-    def feature_importance(self, features: FeatureArray) -> Mapping[str, float]:
-        return self.clf.intercept_, self.clf.coef_[0]
+    def feature_importance(self, features: FeatureArray) -> Mapping[str, float] | None:
+        return None  # self.clf.intercept_, self.clf.coef_[0]
