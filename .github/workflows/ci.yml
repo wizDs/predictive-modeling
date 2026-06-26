@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  bazel-build:
+    name: Bazel Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bazelbuild/setup-bazelisk@v3
+      - name: Cache Bazel
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/bazel
+          key: bazel-${{ runner.os }}-${{ hashFiles('.bazelversion', 'MODULE.bazel', 'requirements_lock.txt') }}
+          restore-keys: bazel-${{ runner.os }}-
+      - run: bazel build //src/...
+
+  mypy:
+    name: mypy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-mypy-${{ runner.os }}-${{ hashFiles('requirements_lock.txt') }}
+          restore-keys: pip-mypy-${{ runner.os }}-
+      - name: Install deps and mypy
+        run: |
+          pip install -r requirements_lock.txt
+          pip install mypy pandas-stubs types-python-dateutil types-requests
+      - name: Run mypy
+        env:
+          MYPYPATH: src/budget:src/evaluation:src/interface:src/shared:src/job_app_backend
+        run: |
+          python -m mypy --explicit-package-bases \
+            src/budget/wiz/budget \
+            src/evaluation/wiz/evaluation \
+            src/interface/wiz/interface \
+            src/shared/wiz/shared \
+            src/job_app_backend/wiz/job_app_backend

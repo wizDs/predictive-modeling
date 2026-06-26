@@ -1,0 +1,24 @@
+# budget
+pydantic>=2.9.2
+polars>=1.13.1
+pyarrow>=18.0.0
+pandas>=2.2.3
+python-dateutil>=2.9.0
+requests>=2.32.0
+google-auth-oauthlib>=1.2.1
+google-auth-httplib2>=0.2.0
+google-api-python-client>=2.153.0
+
+# evaluation + shared
+scikit-learn>=1.6.1
+numpy>=2.2.3
+
+# interface + shared
+xgboost>=2.1.4
+
+# shared
+lightgbm>=4.6.0
+toolz>=1.0.0
+
+# job_app_backend
+spacy>=3.8
