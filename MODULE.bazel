@@ -1,14 +1,23 @@
+# Declares this repository as a Bazel module; name must be unique in the dep graph.
 module(name = "predictive_modeling", version = "0.1.0")
 
+# Pulls rules_python from the Bzlmod central registry — provides py_library, pip integration, etc.
 bazel_dep(name = "rules_python", version = "0.40.0")
 
+# Activates the Python toolchain extension from rules_python.
 python = use_extension("@rules_python//python/extensions:python.bzl", "python")
+# Downloads and registers a hermetic Python 3.13 interpreter managed by Bazel.
+# is_default = True means this toolchain is used when no version is explicitly specified.
 python.toolchain(python_version = "3.13", is_default = True)
 
+# Activates the pip integration extension — lets Bazel manage PyPI packages.
 pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip")
 pip.parse(
-    hub_name = "pip",
-    python_version = "3.13",
+    hub_name = "pip",        # Creates a @pip repository; BUILD files load requirement() from it.
+    python_version = "3.13", # Packages are resolved for this interpreter version.
+    # The lock file pins every transitive dep to an exact version + hash for reproducibility.
+    # Regenerate with: pip-compile requirements.in --output-file requirements_lock.txt
     requirements_lock = "//:requirements_lock.txt",
 )
+# Makes the @pip repository visible to this module so BUILD files can use it.
 use_repo(pip, "pip")

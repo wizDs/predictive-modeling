@@ -1,1 +1,3 @@
+# Tells bazelisk which Bazel version to download and use.
+# Without this, different machines may use different Bazel versions and get different results.
 7.4.1

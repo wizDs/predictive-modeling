@@ -1,3 +1,8 @@
+# Use Bzlmod (MODULE.bazel) as the dependency system instead of the legacy WORKSPACE file.
 build --enable_bzlmod
+
+# Only print test output on failure — keeps CI logs readable.
 test --test_output=errors
+
+# Pin the Python version used when resolving the hermetic toolchain registered in MODULE.bazel.
 build --@rules_python//python/config_settings:python_version=3.13
