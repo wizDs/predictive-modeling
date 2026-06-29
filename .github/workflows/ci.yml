@@ -18,10 +18,4 @@ jobs:
       - name: Install workspace
         run: uv sync --all-packages --group dev
       - name: Run mypy
-        run: |
-          uv run mypy \
-            src/budget/wiz/budget \
-            src/evaluation/wiz/evaluation \
-            src/interface/wiz/interface \
-            src/shared/wiz/shared \
-            src/job_app_backend/wiz/job_app_backend
+        run: uv run mypy
