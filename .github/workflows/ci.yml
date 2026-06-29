@@ -18,4 +18,4 @@ jobs:
       - name: Install workspace
         run: uv sync --all-packages --group dev
       - name: Run mypy
-        run: uv run mypy
+        run: uv run mypy src/

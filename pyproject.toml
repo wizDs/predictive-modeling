@@ -7,6 +7,12 @@ members = [
     "src/job_app_backend",
 ]
 
+[tool.mypy]
+python_version = "3.13"
+namespace_packages = true
+ignore_missing_imports = true
+show_error_codes = true
+
 # Dev tooling shared across the whole workspace.
 # Install with: uv sync --all-packages --group dev
 [dependency-groups]
