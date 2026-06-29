@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  mypy:
+    name: mypy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+      - name: Install workspace
+        run: uv sync --all-packages --group dev
+      - name: Run mypy
+        run: |
+          uv run mypy \
+            src/budget/wiz/budget \
+            src/evaluation/wiz/evaluation \
+            src/interface/wiz/interface \
+            src/shared/wiz/shared \
+            src/job_app_backend/wiz/job_app_backend
