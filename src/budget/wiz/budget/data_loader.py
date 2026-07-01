@@ -1,6 +1,6 @@
 import requests
 import datetime
-from typing import Sequence
+from typing import Any, Sequence
 from wiz.budget import schemas
 
 REQUEST_TIMEOUT = datetime.timedelta(seconds=10)
@@ -15,7 +15,7 @@ def _get_google_sheet_data(
     api_key: str,
     column_start: str = COLUMN_START,
     column_end: str = COLUMN_END,
-) -> Sequence[schemas.Payment]:
+) -> Any:
     """Gets payment data from Google Sheet and returns sequence of Payment objects."""
     # Construct the URL for the Google Sheets API
     base_url = "https://sheets.googleapis.com/v4/spreadsheets"
