@@ -1,0 +1,25 @@
+[tool.uv.workspace]
+members = [
+    "src/budget",
+    "src/evaluation",
+    "src/interface",
+    "src/shared",
+    "src/job_app_backend",
+]
+
+[tool.mypy]
+python_version = "3.13"
+namespace_packages = true
+ignore_missing_imports = true
+show_error_codes = true
+
+# Dev tooling shared across the whole workspace.
+# Install with: uv sync --all-packages --group dev
+[dependency-groups]
+dev = [
+    "mypy>=1.15",
+    "pandas-stubs>=2.2",
+    "types-python-dateutil>=2.9",
+    "types-requests>=2.32",
+    "pytest>=8.3",
+]

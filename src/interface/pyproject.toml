@@ -1,24 +1,16 @@
-[tool.poetry]
+[project]
 name = "interface"
 version = "0.1.0"
-description = ""
-authors = ["wiz <wilsonzhou92@gmail.com>"]
-readme = "README.md"
-packages = [
-    { include="wiz/interface" }, 
+requires-python = ">=3.13"
+dependencies = [
+    "pydantic>=2.10.6",
+    "xgboost>=2.1.4",
+    "numpy>=2.2.3",
 ]
 
-[tool.poetry.dependencies]
-python = "^3.13"
-pydantic = "^2.10.6"
-xgboost = "^2.1.4"
-numpy = "^2.2.3"
-
-
-[tool.poetry.group.dev.dependencies]
-mypy = "^1.15.0"
-pytest = "^8.3.4"
+[tool.hatch.build.targets.wheel]
+packages = ["wiz/interface"]
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
