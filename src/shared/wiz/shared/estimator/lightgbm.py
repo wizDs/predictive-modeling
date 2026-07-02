@@ -1,8 +1,8 @@
 import lightgbm as lgb
 import numpy as np
 from wiz.shared.estimator import estimator
+from wiz.shared.estimator.estimator import FeatureArray, DoubleArray
 from wiz.interface import estimator_interface
-from wiz.shared.estimator import FeatureArray, DoubleArray
 from typing import Mapping
 
 
@@ -11,7 +11,7 @@ class LGBMClassifier(estimator.BinaryClassifier):
     def __init__(self, estimator: estimator_interface.LGBMClassifier, /) -> None:
         super().__init__()
         self.clf = lgb.LGBMClassifier(
-            **estimator.model_dump(exclude=["estimator_type"])
+            **estimator.model_dump(exclude={"estimator_type"})
         )
 
     def fit(self, features: FeatureArray, targets: DoubleArray) -> None:
@@ -32,12 +32,12 @@ class LGBMRegressor(estimator.Regressor):
 
     def __init__(self, estimator: estimator_interface.LGBMRegressor, /) -> None:
         super().__init__()
-        self.clf = lgb.LGBMRegressor(**estimator.model_dump(exclude=["estimator_type"]))
+        self.clf = lgb.LGBMRegressor(**estimator.model_dump(exclude={"estimator_type"}))
 
-    def fit(self, features: np.ndarray, targets: np.ndarray) -> None:
+    def fit(self, features: FeatureArray, targets: DoubleArray) -> None:
         self.clf.fit(features, targets)
 
-    def _predict(self, features: np.ndarray) -> np.ndarray:
+    def _predict(self, features: FeatureArray) -> DoubleArray:
         return self.clf.predict(features)
 
     def feature_importance(self):
