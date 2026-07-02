@@ -18,6 +18,9 @@ TOPTOPSKAT_GRAENSE = 2_592_700
 RENTEFRADRAG_TRIN = 50_000
 RENTEFRADRAG_REDUKTION = 0.08
 
+# https://skat.dk/borger/fradrag/arbejdsrelaterede-fradrag/beskaeftigelses-og-jobfradrag
+MAX_BESKAEFTIGELSESFRADRAG = 63_300
+
 DAGPENGE_MAX_MD_2026 = 22_000
 DAGPENGE_FORHOEJET_MD_2026 = 26_500
 FORHOEJET_PERIODE_MD = 3
@@ -106,7 +109,7 @@ with col4:
         "Fradrag (kr./år)",
         min_value=0,
         max_value=1_000_000,
-        value=0,
+        value=MAX_BESKAEFTIGELSESFRADRAG,
         step=1_000,
         help="Ligningsmæssige fradrag — trækkes fra skattepligtig indkomst",
     )
