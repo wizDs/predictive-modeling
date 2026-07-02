@@ -10,9 +10,9 @@ FeatureArray = np.typing.NDArray[np.float64]
 
 class RegressionCoefficients(TypedDict):
     intercept: float
-    coeficients: Sequence[float]
+    coefficients: Sequence[float]
 
-FeatureImportance: TypeAlias = Mapping[str, float] | Mapping[str, Sequence[float]]
+FeatureImportance: TypeAlias = Mapping[str, float | Sequence[float]]
 
 class BaseEstimator(abc.ABC):
     """Abstract base class for estimators (classifiers or regressors)."""
@@ -76,5 +76,7 @@ class Regressor(BaseEstimator):
         return metric_type.func(targets, prediction)
 
     @abc.abstractmethod
-    def feature_importance(self, features: FeatureArray) -> RegressionCoefficients | None:
+    def feature_importance(
+        self, features: FeatureArray
+    ) -> RegressionCoefficients | FeatureImportance | None:
         """Predict outputs for input data X."""

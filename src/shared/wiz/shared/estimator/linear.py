@@ -1,9 +1,13 @@
 import logging
 from sklearn import linear_model
 import numpy as np
-from .estimator import Regressor
+from wiz.shared.estimator.estimator import (
+    Regressor,
+    FeatureArray,
+    DoubleArray,
+    RegressionCoefficients,
+)
 from wiz.interface import estimator_interface
-from wiz.shared.estimator import FeatureArray, DoubleArray, RegressionCoefficients
 from typing import Mapping
 
 
@@ -15,7 +19,7 @@ class LinearModel(Regressor):
     def __init__(self, estimator: estimator_interface.LinearRegression, /) -> None:
         super().__init__()
         self.clf = linear_model.LinearRegression(
-            **estimator.model_dump(exclude=["estimator_type"])
+            **estimator.model_dump(exclude={"estimator_type"})
         )
 
     def fit(self, features: FeatureArray, targets: DoubleArray) -> None:

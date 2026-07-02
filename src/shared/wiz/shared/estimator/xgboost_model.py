@@ -2,14 +2,14 @@ from collections.abc import Sequence
 
 import xgboost
 import numpy as np
-from .estimator import BinaryClassifier, Regressor
-from wiz.interface import estimator_interface
-from wiz.shared.estimator import (
+from wiz.shared.estimator.estimator import (
+    BinaryClassifier,
+    Regressor,
     FeatureArray,
     DoubleArray,
-    RegressionCoefficients,
     FeatureImportance,
 )
+from wiz.interface import estimator_interface
 from typing import Mapping
 
 
@@ -18,7 +18,7 @@ class XGBoostClassifier(BinaryClassifier):
     def __init__(self, estimator: estimator_interface.XGBoostClassifier, /) -> None:
         super().__init__()
         self.clf = xgboost.XGBClassifier(
-            **estimator.model_dump(exclude=["estimator_type"])
+            **estimator.model_dump(exclude={"estimator_type"})
         )
 
     def fit(self, features: FeatureArray, targets: DoubleArray) -> None:
@@ -41,7 +41,7 @@ class XGBoostRegressor(Regressor):
     def __init__(self, estimator: estimator_interface.XGBoostRegressor, /) -> None:
         super().__init__()
         self.clf = xgboost.XGBRegressor(
-            **estimator.model_dump(exclude=["estimator_type"])
+            **estimator.model_dump(exclude={"estimator_type"})
         )
 
     def fit(self, features: FeatureArray, targets: DoubleArray) -> None:
@@ -51,6 +51,6 @@ class XGBoostRegressor(Regressor):
     def _predict(self, features: FeatureArray) -> DoubleArray:
         return self.clf.predict(features)
 
-    def feature_importance(self, features: FeatureArray) -> RegressionCoefficients:
+    def feature_importance(self, features: FeatureArray) -> FeatureImportance:
         # https://stackoverflow.com/questions/37627923/how-to-get-feature-importance-in-xgboost
         return self.clf_booster.get_score(importance_type="gain")
