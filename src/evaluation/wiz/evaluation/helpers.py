@@ -1,4 +1,5 @@
 import dataclasses
+from math import floor
 import polars as pl
 import numpy as np
 from sklearn import metrics
@@ -16,7 +17,8 @@ class EvaluationSet:
 
 def split_train_test(df: pl.DataFrame, /):
 
-    test_data_df = df.sample(n=len(df) * 0.2)
+    sample_count = floor(len(df) * 0.2)
+    test_data_df = df.sample(n=sample_count)
     train_data_df = df.join(test_data_df, on="id", how="anti")
 
     assert len(set(df["id"])) == len(df["id"]), "id must be unique"

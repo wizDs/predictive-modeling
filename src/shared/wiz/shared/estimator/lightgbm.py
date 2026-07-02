@@ -2,7 +2,7 @@ import lightgbm as lgb
 import numpy as np
 from wiz.shared.estimator import estimator
 from wiz.interface import estimator_interface
-from wiz.interface.feature_array import FeatureArray
+from wiz.shared.estimator import FeatureArray, DoubleArray
 from typing import Mapping
 
 
@@ -14,18 +14,18 @@ class LGBMClassifier(estimator.BinaryClassifier):
             **estimator.model_dump(exclude=["estimator_type"])
         )
 
-    def fit(self, features: np.ndarray, targets: np.ndarray) -> None:
+    def fit(self, features: FeatureArray, targets: DoubleArray) -> None:
         self.clf.fit(features, targets)
 
-    def _predict(self, features: np.ndarray) -> np.ndarray:
+    def _predict(self, features: FeatureArray) -> DoubleArray:
         return self.clf.predict(features)
 
-    def predict_proba(self, features: FeatureArray) -> np.ndarray:
+    def predict_proba(self, features: FeatureArray) -> DoubleArray:
         return self.clf.predict_proba(features)
 
     def feature_importance(self, features: FeatureArray) -> Mapping[str, float]:
         # https://stackoverflow.com/questions/37627923/how-to-get-feature-importance-in-xgboost
-        return None  # self.clf_booster.get_score(importance_type="gain")
+        return {}  # self.clf_booster.get_score(importance_type="gain")
 
 
 class LGBMRegressor(estimator.Regressor):

@@ -1,8 +1,15 @@
+from collections.abc import Sequence
+
 import xgboost
 import numpy as np
 from .estimator import BinaryClassifier, Regressor
 from wiz.interface import estimator_interface
-from wiz.interface.feature_array import FeatureArray
+from wiz.shared.estimator import (
+    FeatureArray,
+    DoubleArray,
+    RegressionCoefficients,
+    FeatureImportance,
+)
 from typing import Mapping
 
 
@@ -14,18 +21,18 @@ class XGBoostClassifier(BinaryClassifier):
             **estimator.model_dump(exclude=["estimator_type"])
         )
 
-    def fit(self, features: np.ndarray, targets: np.ndarray) -> None:
+    def fit(self, features: FeatureArray, targets: DoubleArray) -> None:
         self.clf.fit(features, targets)
         self.clf_booster = self.clf.get_booster()
 
-    def _predict(self, features: np.ndarray) -> np.ndarray:
+    def _predict(self, features: FeatureArray) -> DoubleArray:
         return self.clf.predict(features)
 
-    def feature_importance(self, features: FeatureArray) -> Mapping[str, float]:
+    def feature_importance(self, features: FeatureArray) -> FeatureImportance:
         # https://stackoverflow.com/questions/37627923/how-to-get-feature-importance-in-xgboost
         return self.clf_booster.get_score(importance_type="gain")
 
-    def predict_proba(self, features: FeatureArray) -> np.ndarray:
+    def predict_proba(self, features: FeatureArray) -> DoubleArray:
         return self.clf.predict_proba(features)
 
 
@@ -37,13 +44,13 @@ class XGBoostRegressor(Regressor):
             **estimator.model_dump(exclude=["estimator_type"])
         )
 
-    def fit(self, features: np.ndarray, targets: np.ndarray) -> None:
+    def fit(self, features: FeatureArray, targets: DoubleArray) -> None:
         self.clf.fit(features, targets)
         self.clf_booster = self.clf.get_booster()
 
-    def _predict(self, features: np.ndarray) -> np.ndarray:
+    def _predict(self, features: FeatureArray) -> DoubleArray:
         return self.clf.predict(features)
 
-    def feature_importance(self):
+    def feature_importance(self, features: FeatureArray) -> RegressionCoefficients:
         # https://stackoverflow.com/questions/37627923/how-to-get-feature-importance-in-xgboost
         return self.clf_booster.get_score(importance_type="gain")

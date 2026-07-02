@@ -17,9 +17,10 @@ from __future__ import annotations
 import random
 import re
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, cast
 
 import spacy
+from spacy.pipeline import EntityRecognizer
 from spacy.training import Example
 from spacy.util import minibatch, compounding
 
@@ -234,7 +235,7 @@ def train(
 ) -> Path:
     """Train a spaCy NER model from annotated data and save it."""
     nlp = spacy.blank("xx")  # multilingual blank model
-    ner = nlp.add_pipe("ner")
+    ner = cast(EntityRecognizer, nlp.add_pipe("ner"))
     for label in TAXONOMY:
         ner.add_label(label)
 

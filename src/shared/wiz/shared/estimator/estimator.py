@@ -1,5 +1,6 @@
 import abc
-from typing import Mapping, final
+from collections.abc import Sequence
+from typing import Mapping, TypeAlias, TypedDict, final, overload
 import numpy as np
 from wiz.evaluation import metric  # type: ignore
 
@@ -7,6 +8,11 @@ from wiz.evaluation import metric  # type: ignore
 DoubleArray = np.typing.ArrayLike
 FeatureArray = np.typing.NDArray[np.float64]
 
+class RegressionCoefficients(TypedDict):
+    intercept: float
+    coeficients: Sequence[float]
+
+FeatureImportance: TypeAlias = Mapping[str, float] | Mapping[str, Sequence[float]]
 
 class BaseEstimator(abc.ABC):
     """Abstract base class for estimators (classifiers or regressors)."""
@@ -25,7 +31,7 @@ class BaseEstimator(abc.ABC):
         return self._predict(features)
 
     @abc.abstractmethod
-    def feature_importance(self, features: FeatureArray) -> Mapping[str, float] | None:
+    def feature_importance(self, features: FeatureArray) -> RegressionCoefficients | FeatureImportance | None:
         """Predict outputs for input data X."""
 
 
@@ -51,6 +57,10 @@ class BinaryClassifier(BaseEstimator):
                 prediction = self.predict(features)
                 return metric_type.func(targets, prediction)
 
+    @abc.abstractmethod
+    def feature_importance(self, features: FeatureArray) -> FeatureImportance | None:
+        """Predict outputs for input data X."""
+
 
 class Regressor(BaseEstimator):
     """Abstract base class for regressors."""
@@ -64,3 +74,7 @@ class Regressor(BaseEstimator):
         """Calculate R² score for regression."""
         prediction = self.predict(features)
         return metric_type.func(targets, prediction)
+
+    @abc.abstractmethod
+    def feature_importance(self, features: FeatureArray) -> RegressionCoefficients | None:
+        """Predict outputs for input data X."""
