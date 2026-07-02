@@ -1,0 +1,7 @@
+src/budget/.venv
+src/evaluation/.venv
+src/interface/.venv
+src/job_app_backend/.venv
+src/shared/.venv
+notebooks/.venv
+apps/tools-app/.venv

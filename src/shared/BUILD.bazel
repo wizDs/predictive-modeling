@@ -1,0 +1,15 @@
+load("@rules_python//python:py_library.bzl", "py_library")
+
+py_library(
+    name = "shared",
+    srcs = glob(["wiz/shared/**/*.py"]),
+    imports = ["."],
+    visibility = ["//visibility:public"],
+    deps = [
+        # Depends on evaluation_core (metric.py only), NOT :evaluation -- helpers.py in
+        # evaluation imports wiz.shared, so depending on the full :evaluation target here would
+        # create a circular dependency that Bazel rejects.
+        "//src/evaluation:evaluation_core",
+        "//src/interface",
+    ],
+)

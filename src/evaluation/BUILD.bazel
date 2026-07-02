@@ -1,0 +1,32 @@
+load("@rules_python//python:py_library.bzl", "py_library")
+
+# evaluation_core contains only metric.py, which has no intra-workspace imports. It's split out
+# from :evaluation so that //src/shared can depend on just the metrics without creating a cycle
+# (shared -> evaluation -> shared): helpers.py/helpers2.py import wiz.shared, but metric.py
+# doesn't import anything from shared.
+py_library(
+    name = "evaluation_core",
+    srcs = [
+        "wiz/evaluation/__init__.py",
+        "wiz/evaluation/metric.py",
+    ],
+    imports = ["."],
+    visibility = ["//visibility:public"],
+)
+
+# Full evaluation target: adds helpers which import wiz.shared and wiz.interface. Depends on
+# shared, so shared must only ever reference :evaluation_core, not this target.
+py_library(
+    name = "evaluation",
+    srcs = [
+        "wiz/evaluation/helpers.py",
+        "wiz/evaluation/helpers2.py",
+    ],
+    imports = ["."],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":evaluation_core",
+        "//src/interface",
+        "//src/shared",
+    ],
+)

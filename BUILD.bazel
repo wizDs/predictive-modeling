@@ -1,0 +1,2 @@
+# Root package. Intentionally empty -- this repo only uses Bazel for `bazel query rdeps` based
+# CI change detection, not for building or type-checking Python.

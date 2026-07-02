@@ -1,0 +1,16 @@
+# Declares this repository as a Bazel module; name must be unique in the dep graph.
+#
+# Bazel is used here purely as a dependency-graph engine for CI change detection (`bazel query
+# rdeps`) -- it does not resolve or run Python itself. The actual dependency management and type
+# checking stay on uv/mypy, which are already correctly configured and don't have Bazel's
+# environment-reproduction fragility (see the git history on this branch for the abandoned
+# rules_uv + rules_mypy attempt and why it was dropped: real, reproducible mypy result
+# discrepancies against the pinned uv/mypy environment that weren't worth chasing further).
+module(name = "predictive_modeling", version = "0.1.0")
+
+bazel_dep(name = "rules_python", version = "2.1.0")
+
+# Registers a Python toolchain so py_library targets can be declared and queried. Nothing is
+# ever actually executed against this toolchain.
+python = use_extension("@rules_python//python/extensions:python.bzl", "python")
+python.toolchain(python_version = "3.13", is_default = True)
