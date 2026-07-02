@@ -4,7 +4,12 @@ import xgboost
 import numpy as np
 from .estimator import BinaryClassifier, Regressor
 from wiz.interface import estimator_interface
-from wiz.shared.estimator import FeatureArray, DoubleArray, RegressionCoefficients, FeatureImportance
+from wiz.shared.estimator import (
+    FeatureArray,
+    DoubleArray,
+    RegressionCoefficients,
+    FeatureImportance,
+)
 from typing import Mapping
 
 
@@ -46,6 +51,6 @@ class XGBoostRegressor(Regressor):
     def _predict(self, features: FeatureArray) -> DoubleArray:
         return self.clf.predict(features)
 
-    def feature_importance(self) -> RegressionCoefficients:
+    def feature_importance(self, features: FeatureArray) -> RegressionCoefficients:
         # https://stackoverflow.com/questions/37627923/how-to-get-feature-importance-in-xgboost
         return self.clf_booster.get_score(importance_type="gain")
