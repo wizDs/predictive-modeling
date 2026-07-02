@@ -169,3 +169,8 @@ data
 .prices_cache.parquet
 *.parquet
 .power_app_state.json
+
+# Pants
+.pants.d/
+.pids/
+.pants.workdir/
