@@ -15,6 +15,7 @@ jobs:
       - uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
+          cache-dependency-glob: "uv.lock"
       - name: Install workspace
         run: uv sync --all-packages --group dev
       - name: Run mypy
@@ -40,6 +41,7 @@ jobs:
       - uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
+          cache-dependency-glob: "apps/${{ matrix.app }}/uv.lock"
       - name: Install app
         working-directory: apps/${{ matrix.app }}
         run: uv sync --group dev

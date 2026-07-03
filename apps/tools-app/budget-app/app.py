@@ -91,10 +91,11 @@ def _render_planned_projects(
     if num_projects is None and not planned_projects:
         return []
 
-    projects = (
-        planned_projects
-        if planned_projects
-        else [
+    if planned_projects:
+        projects = planned_projects
+    else:
+        assert num_projects is not None
+        projects = [
             schemas.Record(
                 amount=10_000.0,
                 date=datetime.date(
@@ -104,9 +105,8 @@ def _render_planned_projects(
                 )
                 + dateutil.relativedelta.relativedelta(months=1),
             )
-            for _ in range(num_projects if num_projects is not None else 0)
+            for _ in range(num_projects)
         ]
-    )
 
     records = []
     for i, project in enumerate(projects):
