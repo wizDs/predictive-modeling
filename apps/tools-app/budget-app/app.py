@@ -83,7 +83,7 @@ def load_expected_income_to_polars(
 def _render_planned_projects(
     planned_projects: list[schemas.Record], num_projects: int | None
 ) -> list[schemas.Record]:
-    assert num_projects >= 0
+    assert num_projects is None or num_projects >= 0
     col1, col2, col3 = st.columns([2, 1, 1])
 
     if num_projects is not None and len(planned_projects) > 0:
@@ -91,10 +91,11 @@ def _render_planned_projects(
     if num_projects is None and not planned_projects:
         return []
 
-    projects = (
-        planned_projects
-        if planned_projects
-        else [
+    if planned_projects:
+        projects = planned_projects
+    else:
+        assert num_projects is not None
+        projects = [
             schemas.Record(
                 amount=10_000.0,
                 date=datetime.date(
@@ -106,7 +107,6 @@ def _render_planned_projects(
             )
             for _ in range(num_projects)
         ]
-    )
 
     records = []
     for i, project in enumerate(projects):
@@ -127,6 +127,8 @@ def _render_planned_projects(
             )
         if amount:
             records.append(schemas.Record(amount=amount, date=due_date))
+
+    return records
 
 
 def collect_payment_interface_inputs(

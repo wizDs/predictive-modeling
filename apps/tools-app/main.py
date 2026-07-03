@@ -11,7 +11,7 @@ _HERE = Path(__file__).parent
 pages = {
     "Skat": [
         st.Page(
-            _HERE / "transport-fradrag" / "main.py",
+            _HERE / "transport_fradrag" / "main.py",
             title="Transport Fradrag",
             icon="🚌",
             url_path="transport-fradrag",
@@ -41,7 +41,7 @@ pages = {
             url_path="transcribe",
         ),
         st.Page(
-            _HERE / "job-app" / "main.py",
+            _HERE / "job_app" / "main.py",
             title="Job Application",
             icon="📄",
             url_path="job-application",

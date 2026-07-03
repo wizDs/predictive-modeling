@@ -15,15 +15,15 @@ class FeatureDescription(BaseModel):
 def read_feature_descriptions(path: pathlib.Path) -> pd.DataFrame:
     # read feature names from description file
     with open(path) as f:
-        features = f.readlines()
-        features = filter(lambda s: ":" in s, features)
-        features = filter(partial(re.match, "\\w"), features)
-        features = map(partial(re.sub, '\\n', ''), features)
-        features = map(partial(re.sub, '\\t', ''), features)
-        features = map(partial(re.split, ':\\s+?'), features)
-        features = map(lambda x: FeatureDescription(name=x[0], desc=x[1]), features)
-        features = pd.DataFrame(x.dict() for x in features)
-        
+        raw_lines = f.readlines()
+        colon_lines = filter(lambda s: ":" in s, raw_lines)
+        word_lines = filter(partial(re.match, "\\w"), colon_lines)
+        no_newline = map(partial(re.sub, '\\n', ''), word_lines)
+        no_tab = map(partial(re.sub, '\\t', ''), no_newline)
+        split_lines = map(partial(re.split, ':\\s+?'), no_tab)
+        parsed = map(lambda x: FeatureDescription(name=x[0], desc=x[1]), split_lines)
+        features = pd.DataFrame(x.dict() for x in parsed)
+
     return features
 
 def generate_streamlit_app(dataframes: list[pd.DataFrame], dataraport: Optional[pd.DataFrame] = None) -> None:

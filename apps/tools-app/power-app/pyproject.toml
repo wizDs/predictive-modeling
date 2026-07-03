@@ -14,9 +14,24 @@ dependencies = [
     "streamlit>=1.52.1",
 ]
 
+[dependency-groups]
+dev = [
+    "mypy>=1.15",
+    "pandas-stubs>=2.2",
+    "types-requests>=2.32",
+]
+
 [tool.hatch.build.targets.wheel]
 include = ["power_app"]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.mypy]
+python_version = "3.13"
+namespace_packages = true
+explicit_package_bases = true
+ignore_missing_imports = true
+show_error_codes = true
+exclude = "(^|/)(\\.venv|\\.mypy_cache|\\.pytest_cache|__pycache__)(/|$)"

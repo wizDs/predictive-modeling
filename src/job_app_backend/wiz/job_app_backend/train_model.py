@@ -39,6 +39,6 @@ def main(data_dir: Path) -> None:
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print(f"Usage: {sys.argv[0]} <data_dir>")
-        print("  e.g. python -m wiz.job_app_backend.train_model ./apps/tools-app/job-app/data")
+        print("  e.g. python -m wiz.job_app_backend.train_model ./apps/tools-app/job_app/data")
         sys.exit(1)
     main(Path(sys.argv[1]))
