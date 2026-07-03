@@ -1,9 +1,9 @@
-import lightgbm as lgb
+from typing import Mapping
 import numpy as np
+import lightgbm as lgb
 from wiz.shared.estimator import estimator
 from wiz.shared.estimator.estimator import FeatureArray, DoubleArray
 from wiz.interface import estimator_interface
-from typing import Mapping
 
 
 class LGBMClassifier(estimator.BinaryClassifier):
