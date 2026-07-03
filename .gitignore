@@ -172,5 +172,3 @@ data
 
 # Pants
 .pants.d/
-.pids/
-.pants.workdir/

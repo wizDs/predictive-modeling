@@ -21,7 +21,11 @@ jobs:
           fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '1' }}
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          # Load-bearing, not just a nicety: Pants finds its interpreter by searching the
+          # already-installed Pythons on the runner rather than provisioning its own, and
+          # ubuntu-latest only ships 3.12 by default -- without this, `pants check` fails with
+          # "No interpreter compatible with the requested constraints was found" (verified in CI).
+          python-version-file: .python-version
       - uses: pantsbuild/actions/init-pants@8c037ac70a2cf031e8278af07d1d04732177684d
         with:
           named-caches-hash: ${{ hashFiles('3rdparty/python/*.lock') }}
