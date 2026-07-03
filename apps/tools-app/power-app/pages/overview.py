@@ -1,3 +1,5 @@
+from typing import cast
+
 import polars as pl
 import streamlit as st
 
@@ -28,7 +30,7 @@ def render(joined_df: pl.DataFrame) -> None:
     col1, col2, col3 = st.columns(3)
     with col1:
         avg_price = joined_df[Column.HOURLY_PRICE].mean()
-        st.metric("Avg Price (DKK/kWh)", f"{avg_price:.3f}" if avg_price else "N/A")
+        st.metric("Avg Price (DKK/kWh)", f"{cast(float, avg_price):.3f}" if avg_price else "N/A")
     with col2:
         total_consumption = joined_df[Column.HOURLY_CONSUMPTION].sum()
         st.metric(

@@ -20,9 +20,9 @@ class FeatureColumn(enum.StrEnum):
 def feature_generation(
     monthly_payments: pd.DataFrame,
     user_table: pd.DataFrame,
-    latest_datetime: datetime.datetime = None,
+    latest_datetime: datetime.datetime | None = None,
 ):
-    def _next_user_payment(months: int, column_name: FeatureColumn) -> pd.DataFrame:
+    def _next_user_payment(months: int, column_name: FeatureColumn) -> pd.Series:
         return (
             df.groupby("user_id")["date"]
             .apply(lambda s: s.shift(-months))

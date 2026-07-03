@@ -128,7 +128,7 @@ sns.lineplot(
 # ## By month
 
 # %%
-df = (
+heatmap_df = (
     joined_df.filter(pl.col(Column.HOURLY_CONSUMPTION) > 0)
     .group_by(FeatureColumn.MONTH, FeatureColumn.HOUR_OF_DAY)
     .agg(pl.mean(Column.HOURLY_CONSUMPTION))
@@ -141,7 +141,7 @@ df = (
     .to_pandas()
     .set_index(FeatureColumn.MONTH)
 )
-sns.heatmap(df)
+sns.heatmap(heatmap_df)
 
 # %% [markdown]
 # ## By Event of Day
