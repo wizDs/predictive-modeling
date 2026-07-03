@@ -24,7 +24,7 @@ evaluation = { workspace = true }
 interface = { workspace = true }
 
 [tool.hatch.build.targets.wheel]
-packages = ["wiz/shared"]
+include = ["wiz/shared"]
 
 [build-system]
 requires = ["hatchling"]

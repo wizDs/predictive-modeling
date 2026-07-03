@@ -5,9 +5,9 @@ import json
 from datetime import date, timedelta
 from pathlib import Path
 
-import holidays
 import pandas as pd
 import streamlit as st
+from holidays.countries.denmark import Denmark
 
 _DATA_FILE = Path(__file__).parent / "vacation_days.json"
 
@@ -24,7 +24,7 @@ def _save_vacation(lines: list[str]) -> None:
 
 
 def working_days_in_month(year: int, month: int, vacation: set[date], wfh_days: int) -> int:
-    dk_holidays = set(holidays.Denmark(years=year).keys())
+    dk_holidays = set(Denmark(years=year).keys())
     _, last_day = calendar.monthrange(year, month)
     count = 0
     current_week = None

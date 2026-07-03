@@ -24,8 +24,8 @@ from sklearn.model_selection import KFold
 from eval_regression import ModelReport, ModelReportBuilder
 
 # a frunction that returns an esimator, that is a full ds-model
-ModelConstructor = Callable[[None], BaseEstimator]
-PreprocessorConstructor = Callable[[None], TransformerMixin]
+ModelConstructor = Callable[[], BaseEstimator]
+PreprocessorConstructor = Callable[[], TransformerMixin]
 
 
 def create_preprocessor_oe() -> ColumnTransformer:
@@ -98,24 +98,19 @@ def create_preprocessor_ohe() -> ColumnTransformer:
     ).set_output(transform="pandas")
 
 
-def create_xgboost(preprocessor: PreprocessorConstructor = None) -> Pipeline:
+def create_xgboost(preprocessor: PreprocessorConstructor = create_preprocessor_ohe) -> Pipeline:
     """gets a new instance of a xgboost model"""
-    if not preprocessor:
-        preprocessor = create_preprocessor_ohe
     return Pipeline(
         steps=[("preprocessor", preprocessor()), ("model", xgboost.XGBRegressor())]
     )
 
 
-def create_log_linear(preprocessor: PreprocessorConstructor = None) -> Pipeline:
+def create_log_linear(preprocessor: PreprocessorConstructor = create_preprocessor_ohe) -> Pipeline:
     @np.vectorize
     def truncated_exp(x: float) -> float:
         MIN_PRICE = 0
         MAX_PRICE = 600_000
         return max(min(math.exp(x), MAX_PRICE), MIN_PRICE)
-
-    if not preprocessor:
-        preprocessor = create_preprocessor_ohe
 
     tt_linear = TransformedTargetRegressor(
         regressor=LinearRegression(n_jobs=-1),
@@ -127,10 +122,7 @@ def create_log_linear(preprocessor: PreprocessorConstructor = None) -> Pipeline:
     return Pipeline(steps=[("preprocessor", preprocessor()), ("model", tt_linear)])
 
 
-def create_knn(preprocessor: PreprocessorConstructor = None, **kwargs) -> Pipeline:
-    if not preprocessor:
-        preprocessor = create_preprocessor_ohe
-
+def create_knn(preprocessor: PreprocessorConstructor = create_preprocessor_ohe, **kwargs) -> Pipeline:
     return Pipeline(
         steps=[
             ("preprocessor", preprocessor()),
@@ -139,10 +131,7 @@ def create_knn(preprocessor: PreprocessorConstructor = None, **kwargs) -> Pipeli
     )
 
 
-def create_lasso(preprocessor: PreprocessorConstructor = None) -> Pipeline:
-    if not preprocessor:
-        preprocessor = create_preprocessor_ohe
-
+def create_lasso(preprocessor: PreprocessorConstructor = create_preprocessor_ohe) -> Pipeline:
     return Pipeline(
         steps=[("preprocessor", preprocessor()), ("model", Lasso(tol=1e-3))]
     )
@@ -153,7 +142,7 @@ def error_by_actual_price(
     y: pd.DataFrame,
     model: BaseEstimator,
     kfold: KFold,
-    error_measure: Callable = None,
+    error_measure: Callable | None = None,
 ) -> pd.DataFrame:
     """get table with prediction error by actual price"""
 

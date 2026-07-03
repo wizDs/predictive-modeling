@@ -8,37 +8,43 @@ on:
 
 jobs:
   mypy:
-    name: mypy
+    name: mypy (src)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          # affected_dirs.sh needs history back to the PR's merge base with main.
-          # NOTE: fetch-depth values must be quoted strings here -- the bare number 0 is falsy
-          # in GitHub Actions expressions, so `cond && 0 || 1` always evaluates to 1 regardless
-          # of cond, silently defeating this on every pull_request run.
-          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '1' }}
-      - uses: bazelbuild/setup-bazelisk@v3
-      - name: Cache Bazel
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/bazel
-          key: bazel-${{ runner.os }}-${{ hashFiles('.bazelversion', 'MODULE.bazel') }}
       - uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
+          cache-dependency-glob: "uv.lock"
       - name: Install workspace
         run: uv sync --all-packages --group dev
-      - name: Run mypy on packages affected since main
-        if: github.event_name == 'pull_request'
-        run: |
-          dirs=$(.github/scripts/affected_dirs.sh origin/main)
-          if [ -z "$dirs" ]; then
-            echo "No src/ packages affected; skipping mypy."
-          else
-            echo "Affected packages: $dirs"
-            uv run mypy $dirs
-          fi
-      - name: Run mypy on all packages
-        if: github.event_name != 'pull_request'
-        run: uv run mypy src/
+      - name: Run mypy
+        run: uv run mypy --explicit-package-bases src/
+
+  mypy-apps:
+    name: mypy (apps/${{ matrix.app }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app:
+          - churn
+          - finance
+          - house-prices
+          - tools-app
+          - tools-app/budget-app
+          - tools-app/power-app
+          - tools-app/transcribe
+          - weather-data-db
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: "apps/${{ matrix.app }}/uv.lock"
+      - name: Install app
+        working-directory: apps/${{ matrix.app }}
+        run: uv sync --group dev
+      - name: Run mypy
+        working-directory: apps/${{ matrix.app }}
+        run: uv run mypy --explicit-package-bases .
