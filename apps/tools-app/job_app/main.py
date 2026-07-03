@@ -322,13 +322,13 @@ with tab_shell:
         st.caption("Input file (context for Claude)")
         in_sessions = ["— none —"] + sessions
         in_session = st.selectbox("Input session", in_sessions, key="in_session", label_visibility="collapsed")
-        in_file = st.selectbox("Input file", list(_FILE_LABELS.keys()), format_func=_FILE_LABELS.__getitem__, key="in_file", label_visibility="collapsed")
+        in_file = st.selectbox("Input file", list(_FILE_LABELS.keys()), format_func=lambda k: _FILE_LABELS[k], key="in_file", label_visibility="collapsed")
 
     with io_cols[1]:
         st.caption("Output file (save Claude's last reply)")
         out_sessions = ["— new session —"] + sessions
         out_session = st.selectbox("Output session", out_sessions, key="out_session", label_visibility="collapsed")
-        out_file = st.selectbox("Output file", list(_FILE_LABELS.keys()), format_func=_FILE_LABELS.__getitem__, key="out_file", label_visibility="collapsed")
+        out_file = st.selectbox("Output file", list(_FILE_LABELS.keys()), format_func=lambda k: _FILE_LABELS[k], key="out_file", label_visibility="collapsed")
         out_name = ""
         if out_session == "— new session —":
             out_name = st.text_input("New session name", placeholder="e.g. company-role-2024", key="out_name", label_visibility="collapsed")
