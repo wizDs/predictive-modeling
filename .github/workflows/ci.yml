@@ -8,7 +8,7 @@ on:
 
 jobs:
   mypy:
-    name: mypy
+    name: mypy (src)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -18,4 +18,31 @@ jobs:
       - name: Install workspace
         run: uv sync --all-packages --group dev
       - name: Run mypy
-        run: uv run mypy src/
+        run: uv run mypy --explicit-package-bases src/
+
+  mypy-apps:
+    name: mypy (apps/${{ matrix.app }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app:
+          - churn
+          - finance
+          - house-prices
+          - tools-app
+          - tools-app/budget-app
+          - tools-app/power-app
+          - tools-app/transcribe
+          - weather-data-db
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+      - name: Install app
+        working-directory: apps/${{ matrix.app }}
+        run: uv sync --group dev
+      - name: Run mypy
+        working-directory: apps/${{ matrix.app }}
+        run: uv run mypy --explicit-package-bases .

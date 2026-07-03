@@ -222,7 +222,7 @@ def split_request_params(
 
 def split_request_params_all_versions(
     start: datetime.date, end: datetime.date
-) -> Iterable[RequestParamsV1]:
+) -> Iterable[RequestParams]:
     match start, end:
         case (start, end) if start < V1_DEPRECATED and end < V1_DEPRECATED:
             for params in split_request_params(start, end, RequestParamsV1):

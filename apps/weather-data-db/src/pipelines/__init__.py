@@ -123,6 +123,7 @@ class WeatherPipeline(DataPipeline):
         self, client: DMIClientWrapper, date_range: list[datetime.datetime]
     ) -> Iterable[pd.DataFrame]:
         iteration_count = len(date_range) - 1
+        prev_date = date_range[0]
         for idx, curr_date in tqdm.tqdm(enumerate(date_range), total=iteration_count):
             if idx != 0:
                 yield self._extract_simple(

@@ -83,7 +83,7 @@ def load_expected_income_to_polars(
 def _render_planned_projects(
     planned_projects: list[schemas.Record], num_projects: int | None
 ) -> list[schemas.Record]:
-    assert num_projects >= 0
+    assert num_projects is None or num_projects >= 0
     col1, col2, col3 = st.columns([2, 1, 1])
 
     if num_projects is not None and len(planned_projects) > 0:
@@ -104,7 +104,7 @@ def _render_planned_projects(
                 )
                 + dateutil.relativedelta.relativedelta(months=1),
             )
-            for _ in range(num_projects)
+            for _ in range(num_projects if num_projects is not None else 0)
         ]
     )
 
@@ -127,6 +127,8 @@ def _render_planned_projects(
             )
         if amount:
             records.append(schemas.Record(amount=amount, date=due_date))
+
+    return records
 
 
 def collect_payment_interface_inputs(
