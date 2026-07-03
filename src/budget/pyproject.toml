@@ -22,7 +22,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["wiz/budget"]
+include = ["wiz/budget"]
 
 [build-system]
 requires = ["hatchling"]

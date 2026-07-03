@@ -10,7 +10,7 @@ dependencies = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["wiz/evaluation"]
+include = ["wiz/evaluation"]
 
 [build-system]
 requires = ["hatchling"]
