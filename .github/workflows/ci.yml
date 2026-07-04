@@ -7,8 +7,81 @@ on:
     branches: [main]
 
 jobs:
+  changes:
+    name: detect changes
+    runs-on: ubuntu-latest
+    permissions:
+      # dorny/paths-filter fetches the PR's changed-files list via the GitHub API for
+      # pull_request events rather than using git history -- without this, it silently falls
+      # back to treating every filter as changed (confirmed in CI: the token only had Contents/
+      # Metadata/Packages read by default, and every filter matched despite a single-file diff).
+      pull-requests: read
+      contents: read
+    outputs:
+      src: ${{ steps.filter.outputs.src }}
+      affected_apps: ${{ steps.affected.outputs.apps }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          # Changes to the workflow file itself re-run everything, since a CI logic change
+          # could affect any job regardless of which paths it happens to touch.
+          filters: |
+            src:
+              - 'src/**'
+              - 'pants.toml'
+              - 'pyproject.toml'
+              - '.python-version'
+              - '3rdparty/python/**'
+              - '.github/workflows/ci.yml'
+            churn:
+              - 'apps/churn/**'
+              - '.github/workflows/ci.yml'
+            finance:
+              - 'apps/finance/**'
+              - '.github/workflows/ci.yml'
+            house_prices:
+              - 'apps/house-prices/**'
+              - '.github/workflows/ci.yml'
+            tools_app:
+              - 'apps/tools-app/**'
+              - '.github/workflows/ci.yml'
+            tools_app_budget_app:
+              - 'apps/tools-app/budget-app/**'
+              - '.github/workflows/ci.yml'
+            tools_app_power_app:
+              - 'apps/tools-app/power-app/**'
+              - '.github/workflows/ci.yml'
+            tools_app_transcribe:
+              - 'apps/tools-app/transcribe/**'
+              - '.github/workflows/ci.yml'
+            weather_data_db:
+              - 'apps/weather-data-db/**'
+              - '.github/workflows/ci.yml'
+      # mypy-apps below uses a dynamic matrix (matrix.app: fromJSON(...)) built from this list,
+      # rather than a static matrix gated by a per-app `if:` -- job-level `if:` can't see the
+      # `matrix` context at all (confirmed by actionlint), so filtering the app list before the
+      # matrix is expanded is the only way to skip a whole job instance, not just its steps.
+      - name: Build affected-apps list
+        id: affected
+        run: |
+          apps=()
+          [ "${{ steps.filter.outputs.churn }}" = "true" ] && apps+=("churn")
+          [ "${{ steps.filter.outputs.finance }}" = "true" ] && apps+=("finance")
+          [ "${{ steps.filter.outputs.house_prices }}" = "true" ] && apps+=("house-prices")
+          [ "${{ steps.filter.outputs.tools_app }}" = "true" ] && apps+=("tools-app")
+          [ "${{ steps.filter.outputs.tools_app_budget_app }}" = "true" ] && apps+=("tools-app/budget-app")
+          [ "${{ steps.filter.outputs.tools_app_power_app }}" = "true" ] && apps+=("tools-app/power-app")
+          [ "${{ steps.filter.outputs.tools_app_transcribe }}" = "true" ] && apps+=("tools-app/transcribe")
+          [ "${{ steps.filter.outputs.weather_data_db }}" = "true" ] && apps+=("weather-data-db")
+          json=$(printf '%s\n' "${apps[@]:-}" | jq -R . | jq -sc 'map(select(length > 0))')
+          echo "apps=$json" >> "$GITHUB_OUTPUT"
+
   mypy:
     name: mypy (src)
+    needs: changes
+    if: needs.changes.outputs.src == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,19 +111,13 @@ jobs:
 
   mypy-apps:
     name: mypy (apps/${{ matrix.app }})
+    needs: changes
+    if: needs.changes.outputs.affected_apps != '[]'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        app:
-          - churn
-          - finance
-          - house-prices
-          - tools-app
-          - tools-app/budget-app
-          - tools-app/power-app
-          - tools-app/transcribe
-          - weather-data-db
+        app: ${{ fromJSON(needs.changes.outputs.affected_apps) }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4
