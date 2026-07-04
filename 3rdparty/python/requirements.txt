@@ -1,0 +1,29 @@
+# Consolidated third-party requirements for the `python-default` Pants resolve.
+#
+# This is hand-maintained rather than generated from src/*/pyproject.toml because those files
+# also list intra-workspace packages (e.g. src/shared depends on "evaluation" and "interface").
+# Pants' python_requirements() target has no notion of uv workspace members -- it would try to
+# resolve "evaluation"/"interface" as real PyPI packages and fail. When you add/bump a dependency
+# in a src/*/pyproject.toml, mirror the change here and run `pants generate-lockfiles`.
+#
+# Where a package appears with different floors across src/*/pyproject.toml files (e.g. polars
+# >=1.13.1 in budget vs >=1.24.0 in evaluation), the entry here is intentionally the highest of
+# the two -- a single shared resolve needs one version that satisfies every package's constraint.
+google-api-python-client>=2.153.0
+google-auth-httplib2>=0.2.0
+google-auth-oauthlib>=1.2.1
+ipykernel>=6.29.5
+lightgbm>=4.6.0
+matplotlib>=3.10.1
+numpy>=2.2.3
+pandas>=2.2.3
+polars>=1.24.0
+pyarrow>=19.0.1
+pydantic>=2.10.6
+python-dateutil>=2.9.0
+requests>=2.32.0
+scikit-learn>=1.6.1
+spacy>=3.8,<4
+toolz>=1.0.0
+torch>=2.6.0
+xgboost>=2.1.4

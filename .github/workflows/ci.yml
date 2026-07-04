@@ -7,35 +7,105 @@ on:
     branches: [main]
 
 jobs:
+  changes:
+    name: detect changes
+    runs-on: ubuntu-latest
+    permissions:
+      # dorny/paths-filter fetches the PR's changed-files list via the GitHub API for
+      # pull_request events rather than using git history -- without this, it silently falls
+      # back to treating every filter as changed (confirmed in CI: the token only had Contents/
+      # Metadata/Packages read by default, and every filter matched despite a single-file diff).
+      pull-requests: read
+      contents: read
+    outputs:
+      src: ${{ steps.filter.outputs.src }}
+      affected_apps: ${{ steps.affected.outputs.apps }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          # Changes to the workflow file itself re-run everything, since a CI logic change
+          # could affect any job regardless of which paths it happens to touch.
+          filters: |
+            src:
+              - 'src/**'
+              - 'pants.toml'
+              - 'pyproject.toml'
+              - '.python-version'
+              - '3rdparty/python/**'
+              - '.github/workflows/ci.yml'
+            apps:
+              - 'apps/**'
+              - '.github/workflows/ci.yml'
+          list-files: shell
+      # Maps changed files to the app(s) they belong to by walking up to the nearest
+      # pyproject.toml, instead of hand-listing every app in a filter + a matrix + a bash
+      # if-chain (three places to update -- and forget -- every time an app is added, renamed,
+      # or nested, which this repo has already done more than once). No app name is hardcoded
+      # anywhere; mypy-apps' dynamic matrix just becomes whatever this discovers.
+      - name: Build affected-apps list
+        id: affected
+        run: |
+          apps=()
+          if printf '%s\n' ${{ steps.filter.outputs.apps_files }} | grep -qx '.github/workflows/ci.yml'; then
+            # A CI logic change could affect any app regardless of which paths it touches --
+            # run every app that currently exists, not just the ones in this diff.
+            for pj in apps/*/pyproject.toml apps/*/*/pyproject.toml; do
+              [ -f "$pj" ] && apps+=("$(dirname "${pj#apps/}")")
+            done
+          else
+            for f in ${{ steps.filter.outputs.apps_files }}; do
+              dir=$(dirname "$f")
+              while [ "$dir" != "apps" ] && [ "$dir" != "." ] && [ ! -f "$dir/pyproject.toml" ]; do
+                dir=$(dirname "$dir")
+              done
+              [ -f "$dir/pyproject.toml" ] && apps+=("${dir#apps/}")
+            done
+          fi
+          json=$(printf '%s\n' "${apps[@]:-}" | sort -u | jq -R . | jq -sc 'map(select(length > 0))')
+          echo "apps=$json" >> "$GITHUB_OUTPUT"
+
   mypy:
     name: mypy (src)
+    needs: changes
+    if: needs.changes.outputs.src == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
         with:
-          enable-cache: true
-          cache-dependency-glob: "uv.lock"
-      - name: Install workspace
-        run: uv sync --all-packages --group dev
+          # Always fetch full history. Only the pull_request path (--changed-since=origin/main)
+          # actually needs this, but the push-to-main path is rare enough that a shallow-clone
+          # special case isn't worth it -- and a previous attempt at that (a conditional
+          # expression picking 0 vs 1) was a real, hard-to-read GitHub Actions footgun.
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          # Load-bearing, not just a nicety: Pants finds its interpreter by searching the
+          # already-installed Pythons on the runner rather than provisioning its own, and
+          # ubuntu-latest only ships 3.12 by default -- without this, `pants check` fails with
+          # "No interpreter compatible with the requested constraints was found" (verified in CI).
+          python-version-file: .python-version
+      - uses: pantsbuild/actions/init-pants@8c037ac70a2cf031e8278af07d1d04732177684d
+        with:
+          named-caches-hash: ${{ hashFiles('3rdparty/python/*.lock') }}
       - name: Run mypy
-        run: uv run mypy --explicit-package-bases src/
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            pants --changed-since=origin/main --changed-dependents=transitive check
+          else
+            pants check src::
+          fi
 
   mypy-apps:
     name: mypy (apps/${{ matrix.app }})
+    needs: changes
+    if: needs.changes.outputs.affected_apps != '[]'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        app:
-          - churn
-          - finance
-          - house-prices
-          - tools-app
-          - tools-app/budget-app
-          - tools-app/power-app
-          - tools-app/transcribe
-          - weather-data-db
+        app: ${{ fromJSON(needs.changes.outputs.affected_apps) }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4

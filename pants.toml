@@ -1,0 +1,23 @@
+[GLOBAL]
+pants_version = "2.32.1"
+backend_packages = [
+    "pants.backend.python",
+    "pants.backend.python.typecheck.mypy",
+]
+
+[source]
+root_patterns = ["/src/*"]
+
+[python]
+interpreter_constraints = ["==3.13.*"]
+enable_resolves = true
+resolves = { python-default = "3rdparty/python/default.lock", mypy-tool = "3rdparty/python/mypy-tool.lock" }
+# Use the real `uv` binary (rather than pip/pex) to generate Pants' lockfiles, since this
+# repo's dependency workflow is uv-based. Pants still owns and commits its own lockfiles
+# separately from the root uv.lock -- Pants can't read uv.lock directly (see
+# 3rdparty/python/requirements.txt for why).
+resolver = "uv"
+
+[mypy]
+install_from_resolve = "mypy-tool"
+config = "pyproject.toml"
