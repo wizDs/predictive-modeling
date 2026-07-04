@@ -35,47 +35,35 @@ jobs:
               - '.python-version'
               - '3rdparty/python/**'
               - '.github/workflows/ci.yml'
-            churn:
-              - 'apps/churn/**'
+            apps:
+              - 'apps/**'
               - '.github/workflows/ci.yml'
-            finance:
-              - 'apps/finance/**'
-              - '.github/workflows/ci.yml'
-            house_prices:
-              - 'apps/house-prices/**'
-              - '.github/workflows/ci.yml'
-            tools_app:
-              - 'apps/tools-app/**'
-              - '.github/workflows/ci.yml'
-            tools_app_budget_app:
-              - 'apps/tools-app/budget-app/**'
-              - '.github/workflows/ci.yml'
-            tools_app_power_app:
-              - 'apps/tools-app/power-app/**'
-              - '.github/workflows/ci.yml'
-            tools_app_transcribe:
-              - 'apps/tools-app/transcribe/**'
-              - '.github/workflows/ci.yml'
-            weather_data_db:
-              - 'apps/weather-data-db/**'
-              - '.github/workflows/ci.yml'
-      # mypy-apps below uses a dynamic matrix (matrix.app: fromJSON(...)) built from this list,
-      # rather than a static matrix gated by a per-app `if:` -- job-level `if:` can't see the
-      # `matrix` context at all (confirmed by actionlint), so filtering the app list before the
-      # matrix is expanded is the only way to skip a whole job instance, not just its steps.
+          list-files: shell
+      # Maps changed files to the app(s) they belong to by walking up to the nearest
+      # pyproject.toml, instead of hand-listing every app in a filter + a matrix + a bash
+      # if-chain (three places to update -- and forget -- every time an app is added, renamed,
+      # or nested, which this repo has already done more than once). No app name is hardcoded
+      # anywhere; mypy-apps' dynamic matrix just becomes whatever this discovers.
       - name: Build affected-apps list
         id: affected
         run: |
           apps=()
-          [ "${{ steps.filter.outputs.churn }}" = "true" ] && apps+=("churn")
-          [ "${{ steps.filter.outputs.finance }}" = "true" ] && apps+=("finance")
-          [ "${{ steps.filter.outputs.house_prices }}" = "true" ] && apps+=("house-prices")
-          [ "${{ steps.filter.outputs.tools_app }}" = "true" ] && apps+=("tools-app")
-          [ "${{ steps.filter.outputs.tools_app_budget_app }}" = "true" ] && apps+=("tools-app/budget-app")
-          [ "${{ steps.filter.outputs.tools_app_power_app }}" = "true" ] && apps+=("tools-app/power-app")
-          [ "${{ steps.filter.outputs.tools_app_transcribe }}" = "true" ] && apps+=("tools-app/transcribe")
-          [ "${{ steps.filter.outputs.weather_data_db }}" = "true" ] && apps+=("weather-data-db")
-          json=$(printf '%s\n' "${apps[@]:-}" | jq -R . | jq -sc 'map(select(length > 0))')
+          if printf '%s\n' ${{ steps.filter.outputs.apps_files }} | grep -qx '.github/workflows/ci.yml'; then
+            # A CI logic change could affect any app regardless of which paths it touches --
+            # run every app that currently exists, not just the ones in this diff.
+            for pj in apps/*/pyproject.toml apps/*/*/pyproject.toml; do
+              [ -f "$pj" ] && apps+=("$(dirname "${pj#apps/}")")
+            done
+          else
+            for f in ${{ steps.filter.outputs.apps_files }}; do
+              dir=$(dirname "$f")
+              while [ "$dir" != "apps" ] && [ "$dir" != "." ] && [ ! -f "$dir/pyproject.toml" ]; do
+                dir=$(dirname "$dir")
+              done
+              [ -f "$dir/pyproject.toml" ] && apps+=("${dir#apps/}")
+            done
+          fi
+          json=$(printf '%s\n' "${apps[@]:-}" | sort -u | jq -R . | jq -sc 'map(select(length > 0))')
           echo "apps=$json" >> "$GITHUB_OUTPUT"
 
   mypy:
