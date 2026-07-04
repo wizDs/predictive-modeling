@@ -46,10 +46,40 @@ _PERSONAL_FIELDS = {"name", "phone", "city", "email", "address", "linkedin", "gi
 _CLAUDE = shutil.which("claude") or "/opt/homebrew/bin/claude"
 _MAX_HISTORY_TURNS = 10
 _NEW_SESSION = "— new session —"
+_NEW_VERSION = "— new version —"
+_DEFAULT_VERSION = "draft"
 
 
-def _load(session: str, filename: str) -> str:
-    path = _DATA / session / filename
+def _list_sessions() -> list[str]:
+    return sorted([d.name for d in _DATA.iterdir() if d.is_dir()])
+
+
+def _list_versions(session: str) -> list[str]:
+    """Return version subdirs for a session. Legacy flat sessions get a single 'draft' entry."""
+    session_dir = _DATA / session
+    if not session_dir.is_dir():
+        return []
+    subdirs = sorted([d.name for d in session_dir.iterdir() if d.is_dir()])
+    if subdirs:
+        return subdirs
+    if any(f.is_file() for f in session_dir.iterdir()):
+        return [_DEFAULT_VERSION]
+    return []
+
+
+def _version_path(session: str, version: str) -> Path:
+    """Resolve to actual directory. Legacy flat sessions map 'draft' to the session root."""
+    vdir = _DATA / session / version
+    if vdir.is_dir():
+        return vdir
+    # Legacy: files live directly in session dir
+    if version == _DEFAULT_VERSION and not vdir.exists():
+        return _DATA / session
+    return vdir
+
+
+def _load(session: str, version: str, filename: str) -> str:
+    path = _version_path(session, version) / filename
     return path.read_text(encoding="utf-8") if path.exists() else ""
 
 
@@ -78,7 +108,7 @@ def _run_claude(prompt: str, output_path: Path | None = None) -> str:
     system = (
         "You are a job application assistant. "
         f"The working directory is {_DATA}, which contains session subfolders "
-        "each with cv.tex, application.tex, and job_posting.tex. "
+        "each with version subdirectories (e.g. draft/, final/) containing cv.tex, application.tex, and job_posting.tex. "
         "Help the user craft, review, and improve their job applications. "
         + write_instruction
     )
@@ -116,56 +146,102 @@ _QUICK_PROMPTS = {
     ),
 }
 
+_FILE_LABELS = {"cv.tex": "CV", "application.tex": "Application Letter", "job_posting.tex": "Job Posting"}
+
+
+def _session_version_label(session: str, version: str) -> str:
+    return f"{session} / {version}"
+
+
 # --- Page ---
 
 st.title("Job Application")
 
-sessions = sorted([d.name for d in _DATA.iterdir() if d.is_dir()])
+sessions = _list_sessions()
 
-col_load, col_name = st.columns([2, 3])
-with col_load:
+col_sess, col_ver, col_name = st.columns([2, 2, 3])
+with col_sess:
     selected_session = st.selectbox(
-        "Load session",
+        "Session",
         options=[_NEW_SESSION] + sessions,
         index=0,
     )
-with col_name:
-    default_name = "" if selected_session == _NEW_SESSION else selected_session
-    session_name = st.text_input("Session name", value=default_name, placeholder="e.g. company-role-2024")
-
-# Load files once when selected session changes; cache for both editor and viewer
-if st.session_state.get("_last_session") != selected_session:
-    st.session_state["_last_session"] = selected_session
+with col_ver:
     if selected_session != _NEW_SESSION:
-        st.session_state["cv_text"] = _load(selected_session, "cv.tex")
-        st.session_state["application_text"] = _load(selected_session, "application.tex")
-        st.session_state["job_text"] = _load(selected_session, "job_posting.tex")
+        versions = _list_versions(selected_session)
+        selected_version = st.selectbox(
+            "Version",
+            options=[_NEW_VERSION] + versions,
+            index=1 if versions else 0,
+        )
+    else:
+        versions = []
+        selected_version = _NEW_VERSION
+        st.selectbox("Version", [_NEW_VERSION], disabled=True)
+with col_name:
+    name_cols = st.columns(2)
+    with name_cols[0]:
+        default_sess_name = "" if selected_session == _NEW_SESSION else selected_session
+        session_name = st.text_input("Session name", value=default_sess_name, placeholder="e.g. company-role")
+    with name_cols[1]:
+        default_ver_name = "" if selected_version == _NEW_VERSION else selected_version
+        version_name = st.text_input("Version name", value=default_ver_name, placeholder="e.g. draft, final")
+
+# Load files once when selected session/version changes
+_load_key = (selected_session, selected_version)
+if st.session_state.get("_last_load_key") != _load_key:
+    st.session_state["_last_load_key"] = _load_key
+    if selected_session != _NEW_SESSION and selected_version != _NEW_VERSION:
+        st.session_state["cv_text"] = _load(selected_session, selected_version, "cv.tex")
+        st.session_state["application_text"] = _load(selected_session, selected_version, "application.tex")
+        st.session_state["job_text"] = _load(selected_session, selected_version, "job_posting.tex")
         st.session_state["saved_cv"] = st.session_state["cv_text"]
         st.session_state["saved_application"] = st.session_state["application_text"]
         st.session_state["saved_job"] = st.session_state["job_text"]
     else:
         for key in ("cv_text", "application_text", "job_text", "saved_cv", "saved_application", "saved_job"):
             st.session_state[key] = ""
+    # Sync shell defaults to match top-level selection
+    _all_sv_now = [(s, v) for s in sessions for v in _list_versions(s)]
+    if selected_session != _NEW_SESSION and selected_version != _NEW_VERSION:
+        try:
+            st.session_state["in_sv"] = _all_sv_now.index((selected_session, selected_version))
+        except ValueError:
+            st.session_state["in_sv"] = -1
+    else:
+        st.session_state["in_sv"] = -1
+    st.session_state["out_sv"] = _NEW_VERSION
+    st.session_state["out_new_sess"] = selected_session if selected_session != _NEW_SESSION else ""
+    st.session_state["out_new_ver"] = "final"
 
 st.divider()
 
 tab_editor, tab_viewer, tab_shell = st.tabs(["✏️ Editor", "🔍 Viewer", "🖥️ Shell"])
 
+# Helper: build a flat list of (session, version) pairs for pickers
+_ALL_SV = [(s, v) for s in sessions for v in _list_versions(s)]
+_SV_LABELS = [_session_version_label(s, v) for s, v in _ALL_SV]
+
 with tab_editor:
-    if selected_session == _NEW_SESSION and sessions:
+    if sessions:
         with st.expander("Copy content from existing session"):
-            copy_cols = st.columns([2, 1, 1])
+            copy_cols = st.columns([3, 1, 1, 1])
             with copy_cols[0]:
-                copy_source = st.selectbox("Source session", sessions, label_visibility="collapsed")
+                copy_idx = st.selectbox("Source", range(len(_ALL_SV)), format_func=lambda i: _SV_LABELS[i], key="copy_src", label_visibility="collapsed")
             with copy_cols[1]:
                 copy_cv = st.checkbox("CV", value=True)
             with copy_cols[2]:
                 copy_app = st.checkbox("Application Letter")
+            with copy_cols[3]:
+                copy_job = st.checkbox("Job Posting")
             if st.button("Copy"):
+                src_s, src_v = _ALL_SV[copy_idx]
                 if copy_cv:
-                    st.session_state["cv_text"] = _load(copy_source, "cv.tex")
+                    st.session_state["cv_text"] = _load(src_s, src_v, "cv.tex")
                 if copy_app:
-                    st.session_state["application_text"] = _load(copy_source, "application.tex")
+                    st.session_state["application_text"] = _load(src_s, src_v, "application.tex")
+                if copy_job:
+                    st.session_state["job_text"] = _load(src_s, src_v, "job_posting.tex")
                 st.rerun()
 
     st.subheader("CV")
@@ -192,24 +268,26 @@ with tab_editor:
 
     st.divider()
 
-    if st.button("💾 Save session", type="primary", disabled=not session_name.strip()):
-        name = session_name.strip()
-        session_dir = _DATA / name
-        session_dir.mkdir(parents=True, exist_ok=True)
+    can_save = session_name.strip() and version_name.strip()
+    if st.button("💾 Save session", type="primary", disabled=not can_save):
+        s_name = session_name.strip()
+        v_name = version_name.strip()
+        save_dir = _DATA / s_name / v_name
+        save_dir.mkdir(parents=True, exist_ok=True)
         anonymized_cv = _anonymize_cv(cv)
         anonymized_application = _anonymize_application(application)
         anonymized_job = _anonymize_application(job_posting)
-        (session_dir / "cv.tex").write_text(anonymized_cv, encoding="utf-8")
-        (session_dir / "application.tex").write_text(anonymized_application, encoding="utf-8")
-        (session_dir / "job_posting.tex").write_text(anonymized_job, encoding="utf-8")
+        (save_dir / "cv.tex").write_text(anonymized_cv, encoding="utf-8")
+        (save_dir / "application.tex").write_text(anonymized_application, encoding="utf-8")
+        (save_dir / "job_posting.tex").write_text(anonymized_job, encoding="utf-8")
         st.session_state["saved_cv"] = anonymized_cv
         st.session_state["saved_application"] = anonymized_application
         st.session_state["saved_job"] = anonymized_job
         cv_fields = len(re.findall(r"\\def\\[a-zA-Z]+\{REDACTED\}", anonymized_cv))
         app_fields = len(re.findall(r"REDACTED", anonymized_application))
-        st.success(f"Saved to data/{name}/ — {cv_fields} CV field(s) and {app_fields} contact detail(s) anonymised")
-    elif not session_name.strip():
-        st.caption("Enter a session name to enable saving.")
+        st.success(f"Saved to data/{s_name}/{v_name}/ — {cv_fields} CV field(s) and {app_fields} contact detail(s) anonymised")
+    elif not can_save:
+        st.caption("Enter a session name and version name to enable saving.")
 
 with tab_viewer:
     st.markdown(
@@ -220,11 +298,11 @@ with tab_viewer:
     saved_application = st.session_state.get("saved_application", "")
     saved_job = st.session_state.get("saved_job", "")
 
-    view_mode = st.radio("Mode", ["Single session", "Compare two sessions"], horizontal=True, label_visibility="collapsed")
+    view_mode = st.radio("Mode", ["Single version", "Compare two versions"], horizontal=True, label_visibility="collapsed")
 
-    if view_mode == "Single session":
+    if view_mode == "Single version":
         if not any([saved_cv, saved_job, saved_application]):
-            st.info("Select a saved session above to view its files.")
+            st.info("Select a saved session/version above to view its files.")
         else:
             sub_cv, sub_job, sub_app = st.tabs(["CV", "Job Posting", "Application Letter"])
             with sub_cv:
@@ -279,24 +357,40 @@ with tab_viewer:
                 st.code(saved_application, language="latex", line_numbers=True) if saved_application else st.caption("No application letter saved.")
     else:
         cmp_cols = st.columns(2)
-        default_a = sessions.index(selected_session) + 1 if selected_session != _NEW_SESSION and selected_session in sessions else 0
+        # Default A to current session/version if loaded
+        default_a = 0
+        if selected_session != _NEW_SESSION and selected_version != _NEW_VERSION:
+            try:
+                default_a = _ALL_SV.index((selected_session, selected_version)) + 1
+            except ValueError:
+                pass
         with cmp_cols[0]:
-            cmp_a = st.selectbox("Session A", ["— pick —"] + sessions, index=default_a, key="cmp_a")
+            cmp_a_idx = st.selectbox("Version A", range(-1, len(_ALL_SV)),
+                                     format_func=lambda i: "— pick —" if i < 0 else _SV_LABELS[i],
+                                     index=default_a, key="cmp_a")
         with cmp_cols[1]:
-            cmp_b = st.selectbox("Session B", ["— pick —"] + sessions, key="cmp_b")
+            cmp_b_idx = st.selectbox("Version B", range(-1, len(_ALL_SV)),
+                                     format_func=lambda i: "— pick —" if i < 0 else _SV_LABELS[i],
+                                     key="cmp_b")
 
-        if cmp_a != "— pick —" and cmp_b != "— pick —":
-            all_filenames = sorted({f.name for s in [cmp_a, cmp_b] for f in (_DATA / s).iterdir() if f.is_file()})
+        if cmp_a_idx >= 0 and cmp_b_idx >= 0:
+            sv_a = _ALL_SV[cmp_a_idx]
+            sv_b = _ALL_SV[cmp_b_idx]
+            dir_a = _version_path(*sv_a)
+            dir_b = _version_path(*sv_b)
+            all_filenames = sorted({f.name for d in [dir_a, dir_b] if d.exists() for f in d.iterdir() if f.is_file()})
             for fname in all_filenames:
-                path_a = _DATA / cmp_a / fname
-                path_b = _DATA / cmp_b / fname
+                path_a = dir_a / fname
+                path_b = dir_b / fname
                 text_a = path_a.read_text(encoding="utf-8") if path_a.exists() else ""
                 text_b = path_b.read_text(encoding="utf-8") if path_b.exists() else ""
+                label_a = _session_version_label(*sv_a)
+                label_b = _session_version_label(*sv_b)
                 diff_lines = list(difflib.unified_diff(
                     text_a.splitlines(keepends=True),
                     text_b.splitlines(keepends=True),
-                    fromfile=f"{cmp_a}/{fname}",
-                    tofile=f"{cmp_b}/{fname}",
+                    fromfile=f"{label_a}/{fname}",
+                    tofile=f"{label_b}/{fname}",
                 ))
                 n_changed = sum(1 for l in diff_lines if l.startswith(("+ ", "- ")))
                 label = f"{fname} — {'no differences' if not diff_lines else f'{n_changed} changed lines'}"
@@ -306,8 +400,6 @@ with tab_viewer:
                     else:
                         st.caption("Files are identical.")
 
-_FILE_LABELS = {"cv.tex": "CV", "application.tex": "Application Letter", "job_posting.tex": "Job Posting"}
-
 with tab_shell:
     if "claude_history" not in st.session_state:
         st.session_state.claude_history = []
@@ -316,22 +408,28 @@ with tab_shell:
         st.session_state.claude_history = []
         st.rerun()
 
-    # --- Input / Output file pickers ---
+    # --- Input / Output pickers (session/version) ---
     io_cols = st.columns(2)
     with io_cols[0]:
-        st.caption("Input file (context for Claude)")
-        in_sessions = ["— none —"] + sessions
-        in_session = st.selectbox("Input session", in_sessions, key="in_session", label_visibility="collapsed")
+        st.caption("Input (context for Claude)")
+        in_idx = st.selectbox("Input version", range(-1, len(_ALL_SV)),
+                              format_func=lambda i: "— none —" if i < 0 else _SV_LABELS[i],
+                              key="in_sv", label_visibility="collapsed")
         in_file = st.selectbox("Input file", list(_FILE_LABELS.keys()), format_func=lambda k: _FILE_LABELS[k], key="in_file", label_visibility="collapsed")
 
     with io_cols[1]:
-        st.caption("Output file (save Claude's last reply)")
-        out_sessions = ["— new session —"] + sessions
-        out_session = st.selectbox("Output session", out_sessions, key="out_session", label_visibility="collapsed")
+        st.caption("Output (save Claude's last reply)")
+        out_options = [_NEW_VERSION] + _SV_LABELS
+        out_choice = st.selectbox("Output version", out_options, key="out_sv", label_visibility="collapsed")
         out_file = st.selectbox("Output file", list(_FILE_LABELS.keys()), format_func=lambda k: _FILE_LABELS[k], key="out_file", label_visibility="collapsed")
-        out_name = ""
-        if out_session == "— new session —":
-            out_name = st.text_input("New session name", placeholder="e.g. company-role-2024", key="out_name", label_visibility="collapsed")
+        out_new_session = ""
+        out_new_version = ""
+        if out_choice == _NEW_VERSION:
+            out_new_cols = st.columns(2)
+            with out_new_cols[0]:
+                out_new_session = st.text_input("Session", placeholder="e.g. company-role", key="out_new_sess", label_visibility="collapsed")
+            with out_new_cols[1]:
+                out_new_version = st.text_input("Version", placeholder="e.g. final", key="out_new_ver", label_visibility="collapsed")
 
     st.divider()
 
@@ -368,46 +466,21 @@ with tab_shell:
                 )
                 # Prepend input file content if selected
                 input_ctx = ""
-                if in_session != "— none —":
-                    input_path = _DATA / in_session / in_file
+                if in_idx >= 0:
+                    in_s, in_v = _ALL_SV[in_idx]
+                    input_path = _version_path(in_s, in_v) / in_file
                     if input_path.exists():
-                        input_ctx = f"Context from {in_session}/{in_file}:\n```\n{input_path.read_text(encoding='utf-8')}\n```\n\n"
+                        input_ctx = f"Context from {in_s}/{in_v}/{in_file}:\n```\n{input_path.read_text(encoding='utf-8')}\n```\n\n"
                 full_prompt = f"{history_ctx}\nUser: {input_ctx}{user_input}" if history_ctx else f"{input_ctx}{user_input}"
+                # Resolve output target
                 out_target = None
-                if out_session != "— new session —" and out_session:
-                    out_target = _DATA / out_session / out_file
-                elif out_name.strip():
-                    out_target = _DATA / out_name.strip() / out_file
+                if out_choice != _NEW_VERSION:
+                    out_sv_idx = _SV_LABELS.index(out_choice)
+                    out_s, out_v = _ALL_SV[out_sv_idx]
+                    out_target = _version_path(out_s, out_v) / out_file
+                elif out_new_session.strip() and out_new_version.strip():
+                    out_target = _DATA / out_new_session.strip() / out_new_version.strip() / out_file
                 reply = _run_claude(full_prompt, output_path=out_target)
             st.markdown(reply)
         st.session_state.claude_history.append(("assistant", reply))
 
-    # --- Save last reply to output file ---
-    last_reply = next((m for r, m in reversed(st.session_state.claude_history) if r == "assistant"), None)
-    if last_reply:
-        target_session = out_name.strip() if out_session == "— new session —" else out_session
-        save_disabled = not target_session
-        if st.button(f"💾 Save reply → {target_session or '…'}/{_FILE_LABELS[out_file]}", disabled=save_disabled):
-            out_dir = _DATA / target_session
-            out_dir.mkdir(parents=True, exist_ok=True)
-            (out_dir / out_file).write_text(last_reply, encoding="utf-8")
-            st.success(f"Saved to data/{target_session}/{out_file}")
-
-    # --- Diff: input file vs output file ---
-    if in_session != "— none —":
-        input_path = _DATA / in_session / in_file
-        out_target_session = out_name.strip() if out_session == "— new session —" else out_session
-        output_path = _DATA / out_target_session / out_file if out_target_session else None
-        if input_path.exists() and output_path and output_path.exists():
-            st.divider()
-            st.subheader("Diff — input vs output")
-            diff_lines = list(difflib.unified_diff(
-                input_path.read_text(encoding="utf-8").splitlines(keepends=True),
-                output_path.read_text(encoding="utf-8").splitlines(keepends=True),
-                fromfile=f"{in_session}/{in_file}",
-                tofile=f"{out_target_session}/{out_file}",
-            ))
-            if diff_lines:
-                st.code("".join(diff_lines), language="diff")
-            else:
-                st.caption("No differences.")

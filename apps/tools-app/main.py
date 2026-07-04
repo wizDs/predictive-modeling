@@ -16,6 +16,12 @@ pages = {
             icon="🚌",
             url_path="transport-fradrag",
         ),
+        st.Page(
+            _HERE / "skat_app" / "main.py",
+            title="Skatteberegner",
+            icon="🇩🇰",
+            url_path="skatteberegner",
+        ),
     ],
     "Finance": [
         st.Page(
