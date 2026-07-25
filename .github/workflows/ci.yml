@@ -59,15 +59,6 @@ jobs:
       # never see it (github.com/wizDs/predictive-modeling/issues/16). Pants targets aren't
       # used to actually run mypy on apps/* (mypy-apps below still uses each app's own
       # uv-managed environment) -- purely for this dependency-graph lookup.
-      - name: DEBUG pants roots and target listing
-        run: |
-          pants roots
-          echo "--- pants list :: ---"
-          pants list :: || true
-          echo "--- pants --tag=app list :: ---"
-          pants --tag=app list :: || true
-          echo "--- pants --changed-since=HEAD~1 --changed-dependents=transitive --tag=app list ---"
-          pants --changed-since=HEAD~1 --changed-dependents=transitive --tag=app list || true
       - name: Build affected-apps list
         id: affected
         run: |
@@ -102,8 +93,6 @@ jobs:
           done | sed 's#^apps/##' | sort -u)
 
           json=$(printf '%s\n' "$apps" | jq -R . | jq -sc 'map(select(length > 0))')
-          echo "DEBUG apps list: $apps" >&2
-          echo "DEBUG json: $json" >&2
           echo "apps=$json" >> "$GITHUB_OUTPUT"
 
   mypy:
