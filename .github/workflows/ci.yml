@@ -22,6 +22,11 @@ jobs:
       affected_apps: ${{ steps.affected.outputs.apps }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Needed for `pants --changed-since=origin/main` below (same reason as the mypy
+          # job's checkout) -- a shallow clone has no origin/main to diff against and fails
+          # with "fatal: bad revision" (caught via the DEBUG changed-since dry run in CI).
+          fetch-depth: 0
       - uses: dorny/paths-filter@v3
         id: filter
         with:
