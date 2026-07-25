@@ -38,111 +38,28 @@ jobs:
             apps:
               - 'apps/**'
               - '.github/workflows/ci.yml'
-          list-files: shell
-      # Maps changed files to the app(s) they belong to by walking up to the nearest
-      # pyproject.toml, instead of hand-listing every app in a filter + a matrix + a bash
-      # if-chain (three places to update -- and forget -- every time an app is added, renamed,
-      # or nested, which this repo has already done more than once). No app name is hardcoded
-      # anywhere; mypy-apps' dynamic matrix just becomes whatever this discovers.
-      #
-      # Also walks the *other* direction: a change confined to src/** (e.g. src/budget) never
-      # touches an apps/** path, so the file-based detection above can never see it -- even
-      # though e.g. apps/tools-app/budget-app imports wiz.budget and would silently go
-      # unchecked (github.com/wizDs/predictive-modeling/issues/16). To catch that, every
-      # package's [tool.uv.sources] path=/workspace=true entries are read to build a
-      # reverse-dependency graph from src/<pkg> to the src packages and apps that depend on
-      # it. It's transitive --
-      # src/shared depends on src/evaluation via workspace=true, so a src/evaluation change
-      # must also flag anything that (transitively) depends on src/shared. Changed src/*
-      # packages are then walked through that graph via BFS to pull in every affected app.
+          list-files: json
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+      # .github/scripts/affected_apps.py has the full explanation (module docstring) of why
+      # this exists and how it works -- in short: maps changed apps/** files to their app by
+      # walking up to the nearest pyproject.toml, and maps changed src/** packages to the
+      # app(s) that (transitively) depend on them via a [tool.uv.sources]-derived dependency
+      # graph, since a src-only change never touches an apps/** path on its own
+      # (github.com/wizDs/predictive-modeling/issues/16).
+      - name: Test affected-apps script
+        run: |
+          pip install --quiet pytest
+          python3 -m pytest .github/scripts/test_affected_apps.py -q
       - name: Build affected-apps list
         id: affected
         run: |
-          # Prints one dependency target per line for a pyproject.toml's [tool.uv.sources]
-          # table: the target's src/<pkg> directory name, resolved from path="..." entries, or
-          # the dependency key itself for workspace=true entries (workspace members are always
-          # named after their src/<pkg> directory in this repo). Non-src paths (e.g. tools-app's
-          # power-app = { path = "./power-app" }, an app-to-app dependency) are ignored.
-          parse_src_deps() {
-            local pj="$1" base_dir
-            base_dir="$(dirname "$pj")"
-            awk '/^\[tool\.uv\.sources\]/{flag=1; next} /^\[/{flag=0} flag' "$pj" |
-            while IFS= read -r line; do
-              key=$(echo "$line" | sed -n 's/^\([A-Za-z0-9_.-]*\)[[:space:]]*=.*/\1/p')
-              [ -z "$key" ] && continue
-              if echo "$line" | grep -q 'workspace[[:space:]]*=[[:space:]]*true'; then
-                echo "$key"
-                continue
-              fi
-              path=$(echo "$line" | grep -oP '(?<=path = ")[^"]+' || true)
-              [ -z "$path" ] && continue
-              resolved=$(realpath -m --relative-to="$PWD" "$base_dir/$path")
-              case "$resolved" in
-                src/*) echo "$resolved" | cut -d/ -f2 ;;
-              esac
-            done
-          }
-
-          # reverse_deps[src:<pkg>] lists every id (src:<pkg> or app:<dir>) that depends on it
-          # one hop away -- the BFS below follows those edges transitively.
-          declare -A reverse_deps
-          for pj in src/*/pyproject.toml; do
-            [ -f "$pj" ] || continue
-            id="src:$(basename "$(dirname "$pj")")"
-            while IFS= read -r dep; do
-              [ -n "$dep" ] && reverse_deps["src:$dep"]+="$id "
-            done < <(parse_src_deps "$pj")
-          done
-          for pj in apps/*/pyproject.toml apps/*/*/pyproject.toml; do
-            [ -f "$pj" ] || continue
-            id="app:$(dirname "${pj#apps/}")"
-            while IFS= read -r dep; do
-              [ -n "$dep" ] && reverse_deps["src:$dep"]+="$id "
-            done < <(parse_src_deps "$pj")
-          done
-
-          # BFS from every changed src/* package out to every app that transitively depends
-          # on it.
-          apps_from_src=()
-          declare -A visited
-          queue=()
-          for f in ${{ steps.filter.outputs.src_files }}; do
-            case "$f" in
-              src/*) queue+=("src:$(echo "$f" | cut -d/ -f2)") ;;
-            esac
-          done
-          while [ "${#queue[@]}" -gt 0 ]; do
-            cur="${queue[0]}"
-            queue=("${queue[@]:1}")
-            [ -n "${visited[$cur]:-}" ] && continue
-            visited[$cur]=1
-            for dep in ${reverse_deps[$cur]:-}; do
-              queue+=("$dep")
-              case "$dep" in
-                app:*) apps_from_src+=("${dep#app:}") ;;
-              esac
-            done
-          done
-
-          apps=()
-          if printf '%s\n' ${{ steps.filter.outputs.apps_files }} | grep -qx '.github/workflows/ci.yml'; then
-            # A CI logic change could affect any app regardless of which paths it touches --
-            # run every app that currently exists, not just the ones in this diff.
-            for pj in apps/*/pyproject.toml apps/*/*/pyproject.toml; do
-              [ -f "$pj" ] && apps+=("$(dirname "${pj#apps/}")")
-            done
-          else
-            for f in ${{ steps.filter.outputs.apps_files }}; do
-              dir=$(dirname "$f")
-              while [ "$dir" != "apps" ] && [ "$dir" != "." ] && [ ! -f "$dir/pyproject.toml" ]; do
-                dir=$(dirname "$dir")
-              done
-              [ -f "$dir/pyproject.toml" ] && apps+=("${dir#apps/}")
-            done
-            apps+=("${apps_from_src[@]}")
-          fi
-          json=$(printf '%s\n' "${apps[@]:-}" | sort -u | jq -R . | jq -sc 'map(select(length > 0))')
-          echo "apps=$json" >> "$GITHUB_OUTPUT"
+          python3 .github/scripts/affected_apps.py \
+            --repo-root . \
+            --apps-files '${{ steps.filter.outputs.apps_files }}' \
+            --src-files '${{ steps.filter.outputs.src_files }}' \
+            >> "$GITHUB_OUTPUT"
 
   mypy:
     name: mypy (src)
