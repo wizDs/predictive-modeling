@@ -51,7 +51,7 @@ jobs:
         with:
           named-caches-hash: ${{ hashFiles('3rdparty/python/*.lock') }}
       # apps/BUILD (and the per-app BUILD files under apps/*) give Pants its own view of
-      # apps/** as source roots (see pants.toml's root_patterns), tagged "app". That lets
+      # apps/** as source roots (see pants.toml's marker_filenames), tagged "app". That lets
       # Pants' own dependency-inference graph answer "which apps does this src/* change
       # affect" natively via --changed-dependents=transitive, instead of a hand-rolled
       # [tool.uv.sources]-parsing reverse-dependency graph -- a src/**-only change never
@@ -59,39 +59,31 @@ jobs:
       # never see it (github.com/wizDs/predictive-modeling/issues/16). Pants targets aren't
       # used to actually run mypy on apps/* (mypy-apps below still uses each app's own
       # uv-managed environment) -- purely for this dependency-graph lookup.
+      - name: Test pants-addrs-to-apps script
+        run: |
+          pip install --quiet pytest
+          python3 -m pytest .github/scripts/test_pants_addrs_to_apps.py -q
       - name: Build affected-apps list
         id: affected
         run: |
           if printf '%s\n' ${{ steps.filter.outputs.apps_files }} | grep -qx '.github/workflows/ci.yml'; then
             # A CI logic change could affect any app regardless of which paths it touches --
             # run every app that currently exists, not just the ones in this diff.
-            addrs=$(pants --tag=app list ::)
+            pants_list_cmd=(pants --tag=app list ::)
           elif [ "${{ github.event_name }}" = "pull_request" ]; then
-            addrs=$(pants --changed-since=origin/main --changed-dependents=transitive --tag=app list)
+            pants_list_cmd=(pants --changed-since=origin/main --changed-dependents=transitive --tag=app list)
           else
-            # Push to main: match the mypy(src) job's own push-vs-PR behavior below (full
-            # check, not incremental) rather than diffing against an arbitrary prior commit.
-            addrs=$(pants --tag=app list ::)
+            # Push to main: every app gets its mypy-apps leg re-run here, not just the ones
+            # touched by this push -- deliberately matching the mypy(src) job's own
+            # push-vs-PR split below (full check on push, incremental only on PR), rather than
+            # diffing against github.event.before. That event.before-based incremental
+            # approach was considered and rejected for mypy(src) already (see its own comment
+            # above) as a hard-to-read footgun; push-to-main is rare enough that paying for a
+            # full apps matrix there is the simpler, safer trade.
+            pants_list_cmd=(pants --tag=app list ::)
           fi
 
-          # Each address is either a generator (apps/<dir>:lib) or a generated file target
-          # (apps/<dir>/<nested>/<file>.py:../../lib) -- the target-name suffix's leading
-          # "../" sequence is exactly how many directories to walk up from the file to reach
-          # its owning app dir (e.g. weather-data-db/src/loaders/x.py:../../lib -> walk up 2 ->
-          # weather-data-db), which realpath resolves directly instead of assuming every file
-          # sits at its app's top level.
-          apps=$(echo "$addrs" | while IFS= read -r addr; do
-            [ -z "$addr" ] && continue
-            path="${addr%%:*}"
-            case "$path" in
-              *.py)
-                suffix="${addr#*:}"
-                realpath -m --relative-to="$PWD" "$(dirname "$path")/${suffix%lib}"
-                ;;
-              *) echo "$path" ;;
-            esac
-          done | sed 's#^apps/##' | sort -u)
-
+          apps=$("${pants_list_cmd[@]}" | python3 .github/scripts/pants_addrs_to_apps.py)
           json=$(printf '%s\n' "$apps" | jq -R . | jq -sc 'map(select(length > 0))')
           echo "apps=$json" >> "$GITHUB_OUTPUT"
 
