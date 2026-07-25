@@ -6,7 +6,12 @@ backend_packages = [
 ]
 
 [source]
-root_patterns = ["/src/*"]
+# apps/* is a source root per app (root apps/<name>, or apps/tools-app/<name> for the apps
+# nested a level deeper under tools-app), not per subdirectory -- Pants uses this purely for
+# dependency-graph purposes (see apps/BUILD and .github/workflows/ci.yml's `changes` job), not
+# to run mypy or resolve apps' third-party deps through Pants; each app keeps its own
+# independent uv-managed environment.
+root_patterns = ["/src/*", "/apps/*", "/apps/tools-app/*"]
 
 [python]
 interpreter_constraints = ["==3.13.*"]
