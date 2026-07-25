@@ -61,6 +61,8 @@ jobs:
           pants list :: || true
           echo "--- pants --tag=app list :: ---"
           pants --tag=app list :: || true
+          echo "--- pants --changed-since=HEAD~1 --changed-dependents=transitive --tag=app list ---"
+          pants --changed-since=HEAD~1 --changed-dependents=transitive --tag=app list || true
       - name: Build affected-apps list
         id: affected
         run: |
@@ -77,18 +79,26 @@ jobs:
           fi
 
           # Each address is either a generator (apps/<dir>:lib) or a generated file target
-          # (apps/<dir>/<file>.py:lib) -- either way, its own directory (the filename stripped
-          # off, when there is one) is the app dir the mypy-apps matrix below expects.
+          # (apps/<dir>/<nested>/<file>.py:../../lib) -- the target-name suffix's leading
+          # "../" sequence is exactly how many directories to walk up from the file to reach
+          # its owning app dir (e.g. weather-data-db/src/loaders/x.py:../../lib -> walk up 2 ->
+          # weather-data-db), which realpath resolves directly instead of assuming every file
+          # sits at its app's top level.
           apps=$(echo "$addrs" | while IFS= read -r addr; do
             [ -z "$addr" ] && continue
             path="${addr%%:*}"
             case "$path" in
-              *.py) dirname "$path" ;;
+              *.py)
+                suffix="${addr#*:}"
+                realpath -m --relative-to="$PWD" "$(dirname "$path")/${suffix%lib}"
+                ;;
               *) echo "$path" ;;
             esac
           done | sed 's#^apps/##' | sort -u)
 
           json=$(printf '%s\n' "$apps" | jq -R . | jq -sc 'map(select(length > 0))')
+          echo "DEBUG apps list: $apps" >&2
+          echo "DEBUG json: $json" >&2
           echo "apps=$json" >> "$GITHUB_OUTPUT"
 
   mypy:
