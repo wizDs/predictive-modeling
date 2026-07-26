@@ -22,6 +22,11 @@ jobs:
       affected_apps: ${{ steps.affected.outputs.apps }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Needed for `pants --changed-since=origin/main` below (same reason as the mypy
+          # job's checkout) -- a shallow clone has no origin/main to diff against and fails
+          # with "fatal: bad revision" (caught via the DEBUG changed-since dry run in CI).
+          fetch-depth: 0
       - uses: dorny/paths-filter@v3
         id: filter
         with:
@@ -39,31 +44,52 @@ jobs:
               - 'apps/**'
               - '.github/workflows/ci.yml'
           list-files: shell
-      # Maps changed files to the app(s) they belong to by walking up to the nearest
-      # pyproject.toml, instead of hand-listing every app in a filter + a matrix + a bash
-      # if-chain (three places to update -- and forget -- every time an app is added, renamed,
-      # or nested, which this repo has already done more than once). No app name is hardcoded
-      # anywhere; mypy-apps' dynamic matrix just becomes whatever this discovers.
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+      - uses: pantsbuild/actions/init-pants@8c037ac70a2cf031e8278af07d1d04732177684d
+        with:
+          named-caches-hash: ${{ hashFiles('3rdparty/python/*.lock') }}
+      # apps/BUILD (and the per-app BUILD files under apps/*) give Pants its own view of
+      # apps/** as source roots (see pants.toml's marker_filenames), tagged "app". That lets
+      # Pants' own dependency-inference graph answer "which apps does this src/* change
+      # affect" natively via --changed-dependents=transitive, instead of a hand-rolled
+      # [tool.uv.sources]-parsing reverse-dependency graph -- a src/**-only change never
+      # touches an apps/** path on its own, so the old apps_files-based detection alone could
+      # never see it (github.com/wizDs/predictive-modeling/issues/16). Pants targets aren't
+      # used to actually run mypy on apps/* (mypy-apps below still uses each app's own
+      # uv-managed environment) -- purely for this dependency-graph lookup.
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: ".github/scripts/uv.lock"
+      - name: Test pants-addrs-to-apps script
+        working-directory: .github/scripts
+        run: |
+          uv sync --group dev
+          uv run pytest -q
       - name: Build affected-apps list
         id: affected
         run: |
-          apps=()
           if printf '%s\n' ${{ steps.filter.outputs.apps_files }} | grep -qx '.github/workflows/ci.yml'; then
             # A CI logic change could affect any app regardless of which paths it touches --
             # run every app that currently exists, not just the ones in this diff.
-            for pj in apps/*/pyproject.toml apps/*/*/pyproject.toml; do
-              [ -f "$pj" ] && apps+=("$(dirname "${pj#apps/}")")
-            done
+            pants_list_cmd=(pants --tag=app list ::)
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            pants_list_cmd=(pants --changed-since=origin/main --changed-dependents=transitive --tag=app list)
           else
-            for f in ${{ steps.filter.outputs.apps_files }}; do
-              dir=$(dirname "$f")
-              while [ "$dir" != "apps" ] && [ "$dir" != "." ] && [ ! -f "$dir/pyproject.toml" ]; do
-                dir=$(dirname "$dir")
-              done
-              [ -f "$dir/pyproject.toml" ] && apps+=("${dir#apps/}")
-            done
+            # Push to main: every app gets its mypy-apps leg re-run here, not just the ones
+            # touched by this push -- deliberately matching the mypy(src) job's own
+            # push-vs-PR split below (full check on push, incremental only on PR), rather than
+            # diffing against github.event.before. That event.before-based incremental
+            # approach was considered and rejected for mypy(src) already (see its own comment
+            # above) as a hard-to-read footgun; push-to-main is rare enough that paying for a
+            # full apps matrix there is the simpler, safer trade.
+            pants_list_cmd=(pants --tag=app list ::)
           fi
-          json=$(printf '%s\n' "${apps[@]:-}" | sort -u | jq -R . | jq -sc 'map(select(length > 0))')
+
+          apps=$("${pants_list_cmd[@]}" | python3 .github/scripts/pants_addrs_to_apps.py)
+          json=$(printf '%s\n' "$apps" | jq -R . | jq -sc 'map(select(length > 0))')
           echo "apps=$json" >> "$GITHUB_OUTPUT"
 
   mypy:
@@ -92,7 +118,13 @@ jobs:
       - name: Run mypy
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            pants --changed-since=origin/main --changed-dependents=transitive check
+            # --tag='-app' excludes apps/* targets from the final check set (apps/BUILD tags
+            # them "app" -- see the `changes` job) without narrowing --changed-dependents'
+            # graph traversal itself: an apps/* file that depends on a changed src/* package
+            # still correctly keeps that src/* package (and its other src/* dependents) in
+            # scope, it just doesn't make Pants try to mypy-check the app itself. Apps are
+            # type-checked separately, in their own uv-managed environments, by mypy-apps.
+            pants --changed-since=origin/main --changed-dependents=transitive --tag='-app' check
           else
             pants check src::
           fi

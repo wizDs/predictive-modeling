@@ -6,7 +6,11 @@ backend_packages = [
 ]
 
 [source]
-root_patterns = ["/src/*"]
+# marker_filenames (every package's own pyproject.toml) makes each one a source root with no
+# depth limit, unlike a hardcoded root_patterns glob (issues/16, issues/25). Used only for
+# dependency-graph lookups (apps/BUILD, ci.yml's `changes` job) -- apps still run mypy in their
+# own independent uv-managed environments, not through Pants.
+marker_filenames = ["pyproject.toml"]
 
 [python]
 interpreter_constraints = ["==3.13.*"]
