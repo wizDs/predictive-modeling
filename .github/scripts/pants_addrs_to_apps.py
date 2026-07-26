@@ -1,17 +1,12 @@
 #!/usr/bin/env python3
-"""Map `pants list` target addresses (read one per line from stdin) to their owning apps/<dir>,
-for ci.yml's `changes` job. Prints each affected app dir once, sorted, one per line.
+"""Map `pants list` target addresses (stdin, one per line) to their owning apps/<dir>, for
+ci.yml's `changes` job. Prints each affected app dir once, sorted.
 
-An address is either a generator itself (apps/<dir>:<name>) or a generated file target
-(apps/<dir>/<nested>/<file>.py:<up><name>, e.g. apps/weather-data-db/src/loaders/x.py:../../lib)
--- the target-name part after the colon is some number of "../" (however many directories the
-file sits below its app's own directory) followed by the generator's own name. Walking up that
-many directories from the file reaches the owning app dir.
-
-The "../" count is read structurally (a regex match on the leading "../" run), not by stripping
-a hardcoded generator name like "lib" off the end -- every apps/*/BUILD in this repo happens to
-name its target "lib" today, but nothing enforces that, and string-stripping a literal "lib"
-would silently produce a wrong path the moment a BUILD file names its target anything else.
+An address is either a bare generator (apps/<dir>:name -- the path is the app dir) or a
+generated file target (apps/<dir>/<nested>/file.py:<../..>name), where the "../" count in the
+suffix is how many directories to walk up from the file to reach the app dir. That count is
+read structurally via regex, not by stripping a hardcoded generator name like "lib", since
+nothing guarantees every BUILD file names its target that.
 """
 
 import re

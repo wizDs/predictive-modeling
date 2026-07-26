@@ -6,18 +6,10 @@ backend_packages = [
 ]
 
 [source]
-# Every package -- src/<pkg> and apps/<app>, including the apps nested under apps/tools-app --
-# has its own pyproject.toml, so using it as a source-root marker makes each one a source root
-# automatically. An earlier version of this hardcoded root_patterns = ["/apps/*",
-# "/apps/tools-app/*"] instead: correct for today's layout, but a future app nested somewhere
-# that pattern doesn't anticipate would silently never become a source root -- no error, it
-# would just never show up in `pants --tag=app list` and its mypy-apps CI leg would silently
-# never run (github.com/wizDs/predictive-modeling/issues/16, issues/25). Marker-file detection
-# has no such depth limit. The repo-root and notebooks/ pyproject.toml also become source roots
-# as a harmless side effect -- nothing declares a python_sources() target there, so nothing
-# claims files under them. Pants uses all of this purely for dependency-graph purposes (see
-# apps/BUILD and .github/workflows/ci.yml's `changes` job), not to run mypy or resolve apps'
-# third-party deps through Pants; each app keeps its own independent uv-managed environment.
+# marker_filenames (every package's own pyproject.toml) makes each one a source root with no
+# depth limit, unlike a hardcoded root_patterns glob (issues/16, issues/25). Used only for
+# dependency-graph lookups (apps/BUILD, ci.yml's `changes` job) -- apps still run mypy in their
+# own independent uv-managed environments, not through Pants.
 marker_filenames = ["pyproject.toml"]
 
 [python]
