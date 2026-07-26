@@ -14,8 +14,6 @@ name its target "lib" today, but nothing enforces that, and string-stripping a l
 would silently produce a wrong path the moment a BUILD file names its target anything else.
 """
 
-from __future__ import annotations
-
 import re
 import sys
 from pathlib import PurePosixPath

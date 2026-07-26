@@ -59,10 +59,15 @@ jobs:
       # never see it (github.com/wizDs/predictive-modeling/issues/16). Pants targets aren't
       # used to actually run mypy on apps/* (mypy-apps below still uses each app's own
       # uv-managed environment) -- purely for this dependency-graph lookup.
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: ".github/scripts/uv.lock"
       - name: Test pants-addrs-to-apps script
+        working-directory: .github/scripts
         run: |
-          pip install --quiet pytest
-          python3 -m pytest .github/scripts/test_pants_addrs_to_apps.py -q
+          uv sync --group dev
+          uv run pytest -q
       - name: Build affected-apps list
         id: affected
         run: |
