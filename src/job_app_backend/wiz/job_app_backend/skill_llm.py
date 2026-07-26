@@ -5,8 +5,6 @@ Returns the same entity format as skill_model.predict() so the two
 backends are interchangeable in the UI.
 """
 
-from __future__ import annotations
-
 import json
 import re
 
