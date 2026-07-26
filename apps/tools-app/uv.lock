@@ -1542,7 +1542,7 @@ wheels = [
 [[package]]
 name = "power-app"
 version = "0.1.0"
-source = { editable = "power-app" }
+source = { editable = "../power-app" }
 dependencies = [
     { name = "joblib" },
     { name = "pandas" },
@@ -2357,7 +2357,7 @@ dev = [
     { name = "budget", editable = "../../src/budget" },
     { name = "mypy", specifier = ">=1.15" },
     { name = "pandas-stubs", specifier = ">=2.2" },
-    { name = "power-app", editable = "power-app" },
+    { name = "power-app", editable = "../power-app" },
     { name = "types-python-dateutil", specifier = ">=2.9" },
     { name = "types-requests", specifier = ">=2.32" },
 ]

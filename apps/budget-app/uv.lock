@@ -93,7 +93,7 @@ wheels = [
 [[package]]
 name = "budget"
 version = "0.1.0"
-source = { editable = "../../../src/budget" }
+source = { editable = "../../src/budget" }
 dependencies = [
     { name = "google-api-python-client" },
     { name = "google-auth-httplib2" },
@@ -149,7 +149,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "budget", editable = "../../../src/budget" },
+    { name = "budget", editable = "../../src/budget" },
     { name = "mypy", specifier = ">=1.15" },
 ]
 

@@ -31,7 +31,7 @@ dev = [
 
 [tool.uv.sources]
 budget = { path = "../../src/budget", editable = true }
-power-app = { path = "./power-app", editable = true }
+power-app = { path = "../power-app", editable = true }
 job-app-backend = { path = "../../src/job_app_backend", editable = true }
 
 [tool.mypy]
@@ -40,7 +40,4 @@ namespace_packages = true
 explicit_package_bases = true
 ignore_missing_imports = true
 show_error_codes = true
-# budget-app, power-app, and transcribe are separate uv projects with their own
-# lockfiles and CI matrix entries; job_app and transport_fradrag run in this
-# project's own venv and have no pyproject.toml of their own, so they're checked here.
-exclude = "(^|/)(\\.venv|\\.mypy_cache|\\.pytest_cache|__pycache__|budget-app|power-app|transcribe)(/|$)"
+exclude = "(^|/)(\\.venv|\\.mypy_cache|\\.pytest_cache|__pycache__)(/|$)"

@@ -7,6 +7,7 @@ load_dotenv()
 st.set_page_config(layout="wide")
 
 _HERE = Path(__file__).parent
+_APPS = _HERE.parent
 
 pages = {
     "Skat": [
@@ -25,7 +26,7 @@ pages = {
     ],
     "Finance": [
         st.Page(
-            _HERE / "budget-app" / "app.py",
+            _APPS / "budget-app" / "app.py",
             title="Budget",
             icon="💰",
             url_path="budget",
@@ -33,7 +34,7 @@ pages = {
     ],
     "Energy": [
         st.Page(
-            _HERE / "power-app" / "power-app.py",
+            _APPS / "power-app" / "power-app.py",
             title="Power Usage",
             icon="⚡",
             url_path="power",
@@ -41,7 +42,7 @@ pages = {
     ],
     "Tools": [
         st.Page(
-            _HERE / "transcribe" / "main.py",
+            _APPS / "transcribe" / "main.py",
             title="Transcribe",
             icon="🎙️",
             url_path="transcribe",

@@ -17,7 +17,7 @@ dev = [
 ]
 
 [tool.uv.sources]
-budget = { path = "../../../src/budget", editable = true }
+budget = { path = "../../src/budget", editable = true }
 
 [tool.mypy]
 python_version = "3.13"
