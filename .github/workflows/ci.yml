@@ -7,6 +7,16 @@ on:
     branches: [main]
 
 jobs:
+  ruff:
+    name: ruff
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Ruff does a syntax-level lint, not a type check, so it needs no project
+      # dependencies installed -- unlike mypy/mypy-apps, one full-repo scan covers
+      # src/* and every app without a per-app matrix (see issues/23).
+      - uses: astral-sh/ruff-action@v3
+
   changes:
     name: detect changes
     runs-on: ubuntu-latest

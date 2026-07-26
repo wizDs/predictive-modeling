@@ -12,8 +12,6 @@ Categories:
   SOFT      – soft / interpersonal skills
 """
 
-from __future__ import annotations
-
 import random
 import re
 from pathlib import Path
