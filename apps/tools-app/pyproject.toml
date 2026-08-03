@@ -17,6 +17,7 @@ dependencies = [
     "streamlit>=1.52.1",
     "watchdog>=6.0.0",
     "job-app-backend",
+    "minio>=7.2.20",
 ]
 
 [dependency-groups]
@@ -28,6 +29,7 @@ dev = [
     "types-requests>=2.32",
     "types-python-dateutil>=2.9",
     "ruff>=0.9",
+    "pytest>=9.1.1",
 ]
 
 [tool.uv.sources]

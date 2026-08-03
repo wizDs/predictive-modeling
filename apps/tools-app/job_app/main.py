@@ -2,11 +2,20 @@ import difflib
 import re
 import shutil
 import subprocess
+import sys
+import tempfile
 from collections import Counter
 from pathlib import Path
 import streamlit as st
 
+# Streamlit execs page scripts directly, so sys.path isn't guaranteed to contain
+# apps/tools-app (the parent of this package) regardless of which entrypoint launched it.
+_APP_ROOT = Path(__file__).resolve().parent.parent
+if str(_APP_ROOT) not in sys.path:
+    sys.path.insert(0, str(_APP_ROOT))
+
 from wiz.job_app_backend import MODEL_DIR, predict, highlight_html, LABEL_COLOURS, load_model, skill_llm
+from job_app.storage import FILENAMES, SessionStorage, bucket_from_env, client_from_env
 
 _BACKEND_SPACY = "spaCy NER"
 _BACKEND_LLM = f"LLM ({skill_llm.DEFAULT_MODEL})"
@@ -38,49 +47,16 @@ _BACKEND_DISPATCH = {
     _BACKEND_LLM: _predict_skills_llm,
 }
 
-_HERE = Path(__file__).parent
-_DATA = _HERE / "data"
-_DATA.mkdir(exist_ok=True)
-
 _PERSONAL_FIELDS = {"name", "phone", "city", "email", "address", "linkedin", "github", "website", "mobile"}
 _CLAUDE = shutil.which("claude") or "/opt/homebrew/bin/claude"
 _MAX_HISTORY_TURNS = 10
 _NEW_SESSION = "— new session —"
 _NEW_VERSION = "— new version —"
-_DEFAULT_VERSION = "draft"
 
 
-def _list_sessions() -> list[str]:
-    return sorted([d.name for d in _DATA.iterdir() if d.is_dir()])
-
-
-def _list_versions(session: str) -> list[str]:
-    """Return version subdirs for a session. Legacy flat sessions get a single 'draft' entry."""
-    session_dir = _DATA / session
-    if not session_dir.is_dir():
-        return []
-    subdirs = sorted([d.name for d in session_dir.iterdir() if d.is_dir()])
-    if subdirs:
-        return subdirs
-    if any(f.is_file() for f in session_dir.iterdir()):
-        return [_DEFAULT_VERSION]
-    return []
-
-
-def _version_path(session: str, version: str) -> Path:
-    """Resolve to actual directory. Legacy flat sessions map 'draft' to the session root."""
-    vdir = _DATA / session / version
-    if vdir.is_dir():
-        return vdir
-    # Legacy: files live directly in session dir
-    if version == _DEFAULT_VERSION and not vdir.exists():
-        return _DATA / session
-    return vdir
-
-
-def _load(session: str, version: str, filename: str) -> str:
-    path = _version_path(session, version) / filename
-    return path.read_text(encoding="utf-8") if path.exists() else ""
+@st.cache_resource
+def _get_storage() -> SessionStorage:
+    return SessionStorage(client_from_env(), bucket_from_env())
 
 
 def _anonymize_cv(text: str) -> str:
@@ -98,7 +74,33 @@ def _anonymize_application(text: str) -> str:
     return text
 
 
-def _run_claude(prompt: str, output_path: Path | None = None) -> str:
+def _mirror_dir() -> Path:
+    """A per-browser-session local scratch directory the Claude CLI can read/write against.
+
+    The Claude CLI only speaks the filesystem, so session files are mirrored down from MinIO
+    into this directory before each call and any write Claude makes is uploaded back after.
+    """
+    if "_mirror_dir" not in st.session_state:
+        st.session_state["_mirror_dir"] = tempfile.mkdtemp(prefix="job_app_mirror_")
+    return Path(st.session_state["_mirror_dir"])
+
+
+def _sync_mirror(storage: SessionStorage, mirror: Path) -> None:
+    for session in storage.list_sessions():
+        for version in storage.list_versions(session):
+            for filename in FILENAMES:
+                content = storage.load(session, version, filename)
+                if content:
+                    target = mirror / session / version / filename
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_text(content, encoding="utf-8")
+
+
+def _run_claude(
+    storage: SessionStorage, mirror: Path, prompt: str, output_target: tuple[str, str, str] | None = None
+) -> str:
+    _sync_mirror(storage, mirror)
+    output_path = mirror.joinpath(*output_target) if output_target else None
     write_instruction = (
         f"When writing files, ONLY write to {output_path}. "
         "Never modify the files you read from — treat them as read-only source material."
@@ -107,20 +109,23 @@ def _run_claude(prompt: str, output_path: Path | None = None) -> str:
     )
     system = (
         "You are a job application assistant. "
-        f"The working directory is {_DATA}, which contains session subfolders "
+        f"The working directory is {mirror}, which contains session subfolders "
         "each with version subdirectories (e.g. draft/, final/) containing cv.tex, application.tex, and job_posting.tex. "
         "Help the user craft, review, and improve their job applications. "
         + write_instruction
     )
     result = subprocess.run(
-        [_CLAUDE, "-p", prompt, "--system-prompt", system, "--add-dir", str(_DATA),
+        [_CLAUDE, "-p", prompt, "--system-prompt", system, "--add-dir", str(mirror),
          "--allowedTools", "Edit", "Write", "Read", "Bash"],
-        cwd=_DATA,
+        cwd=mirror,
         capture_output=True,
         text=True,
         timeout=120,
     )
-    return (result.stdout or result.stderr).strip()
+    reply = (result.stdout or result.stderr).strip()
+    if output_target is not None and output_path is not None and output_path.exists():
+        storage.save(*output_target, output_path.read_text(encoding="utf-8"))
+    return reply
 
 
 _QUICK_PROMPTS = {
@@ -157,7 +162,15 @@ def _session_version_label(session: str, version: str) -> str:
 
 st.title("Job Application")
 
-sessions = _list_sessions()
+try:
+    storage = _get_storage()
+    sessions = storage.list_sessions()
+except Exception as exc:
+    st.error(
+        f"Could not reach MinIO storage: {exc}\n\n"
+        "Start it with `docker compose up -d` from `apps/tools-app/` (see `.env.example`), then reload."
+    )
+    st.stop()
 
 col_sess, col_ver, col_name = st.columns([2, 2, 3])
 with col_sess:
@@ -168,7 +181,7 @@ with col_sess:
     )
 with col_ver:
     if selected_session != _NEW_SESSION:
-        versions = _list_versions(selected_session)
+        versions = storage.list_versions(selected_session)
         selected_version = st.selectbox(
             "Version",
             options=[_NEW_VERSION] + versions,
@@ -192,9 +205,9 @@ _load_key = (selected_session, selected_version)
 if st.session_state.get("_last_load_key") != _load_key:
     st.session_state["_last_load_key"] = _load_key
     if selected_session != _NEW_SESSION and selected_version != _NEW_VERSION:
-        st.session_state["cv_text"] = _load(selected_session, selected_version, "cv.tex")
-        st.session_state["application_text"] = _load(selected_session, selected_version, "application.tex")
-        st.session_state["job_text"] = _load(selected_session, selected_version, "job_posting.tex")
+        st.session_state["cv_text"] = storage.load(selected_session, selected_version, "cv.tex")
+        st.session_state["application_text"] = storage.load(selected_session, selected_version, "application.tex")
+        st.session_state["job_text"] = storage.load(selected_session, selected_version, "job_posting.tex")
         st.session_state["saved_cv"] = st.session_state["cv_text"]
         st.session_state["saved_application"] = st.session_state["application_text"]
         st.session_state["saved_job"] = st.session_state["job_text"]
@@ -202,7 +215,7 @@ if st.session_state.get("_last_load_key") != _load_key:
         for key in ("cv_text", "application_text", "job_text", "saved_cv", "saved_application", "saved_job"):
             st.session_state[key] = ""
     # Sync shell defaults to match top-level selection
-    _all_sv_now = [(s, v) for s in sessions for v in _list_versions(s)]
+    _all_sv_now = [(s, v) for s in sessions for v in storage.list_versions(s)]
     if selected_session != _NEW_SESSION and selected_version != _NEW_VERSION:
         try:
             st.session_state["in_sv"] = _all_sv_now.index((selected_session, selected_version))
@@ -219,7 +232,7 @@ st.divider()
 tab_editor, tab_viewer, tab_shell = st.tabs(["✏️ Editor", "🔍 Viewer", "🖥️ Shell"])
 
 # Helper: build a flat list of (session, version) pairs for pickers
-_ALL_SV = [(s, v) for s in sessions for v in _list_versions(s)]
+_ALL_SV = [(s, v) for s in sessions for v in storage.list_versions(s)]
 _SV_LABELS = [_session_version_label(s, v) for s, v in _ALL_SV]
 
 with tab_editor:
@@ -237,11 +250,11 @@ with tab_editor:
             if st.button("Copy"):
                 src_s, src_v = _ALL_SV[copy_idx]
                 if copy_cv:
-                    st.session_state["cv_text"] = _load(src_s, src_v, "cv.tex")
+                    st.session_state["cv_text"] = storage.load(src_s, src_v, "cv.tex")
                 if copy_app:
-                    st.session_state["application_text"] = _load(src_s, src_v, "application.tex")
+                    st.session_state["application_text"] = storage.load(src_s, src_v, "application.tex")
                 if copy_job:
-                    st.session_state["job_text"] = _load(src_s, src_v, "job_posting.tex")
+                    st.session_state["job_text"] = storage.load(src_s, src_v, "job_posting.tex")
                 st.rerun()
 
     st.subheader("CV")
@@ -272,20 +285,18 @@ with tab_editor:
     if st.button("💾 Save session", type="primary", disabled=not can_save):
         s_name = session_name.strip()
         v_name = version_name.strip()
-        save_dir = _DATA / s_name / v_name
-        save_dir.mkdir(parents=True, exist_ok=True)
         anonymized_cv = _anonymize_cv(cv)
         anonymized_application = _anonymize_application(application)
         anonymized_job = _anonymize_application(job_posting)
-        (save_dir / "cv.tex").write_text(anonymized_cv, encoding="utf-8")
-        (save_dir / "application.tex").write_text(anonymized_application, encoding="utf-8")
-        (save_dir / "job_posting.tex").write_text(anonymized_job, encoding="utf-8")
+        storage.save(s_name, v_name, "cv.tex", anonymized_cv)
+        storage.save(s_name, v_name, "application.tex", anonymized_application)
+        storage.save(s_name, v_name, "job_posting.tex", anonymized_job)
         st.session_state["saved_cv"] = anonymized_cv
         st.session_state["saved_application"] = anonymized_application
         st.session_state["saved_job"] = anonymized_job
         cv_fields = len(re.findall(r"\\def\\[a-zA-Z]+\{REDACTED\}", anonymized_cv))
         app_fields = len(re.findall(r"REDACTED", anonymized_application))
-        st.success(f"Saved to data/{s_name}/{v_name}/ — {cv_fields} CV field(s) and {app_fields} contact detail(s) anonymised")
+        st.success(f"Saved to {s_name}/{v_name}/ — {cv_fields} CV field(s) and {app_fields} contact detail(s) anonymised")
     elif not can_save:
         st.caption("Enter a session name and version name to enable saving.")
 
@@ -376,14 +387,9 @@ with tab_viewer:
         if cmp_a_idx >= 0 and cmp_b_idx >= 0:
             sv_a = _ALL_SV[cmp_a_idx]
             sv_b = _ALL_SV[cmp_b_idx]
-            dir_a = _version_path(*sv_a)
-            dir_b = _version_path(*sv_b)
-            all_filenames = sorted({f.name for d in [dir_a, dir_b] if d.exists() for f in d.iterdir() if f.is_file()})
-            for fname in all_filenames:
-                path_a = dir_a / fname
-                path_b = dir_b / fname
-                text_a = path_a.read_text(encoding="utf-8") if path_a.exists() else ""
-                text_b = path_b.read_text(encoding="utf-8") if path_b.exists() else ""
+            for fname in FILENAMES:
+                text_a = storage.load(*sv_a, fname)
+                text_b = storage.load(*sv_b, fname)
                 label_a = _session_version_label(*sv_a)
                 label_b = _session_version_label(*sv_b)
                 diff_lines = list(difflib.unified_diff(
@@ -401,6 +407,8 @@ with tab_viewer:
                         st.caption("Files are identical.")
 
 with tab_shell:
+    mirror = _mirror_dir()
+
     if "claude_history" not in st.session_state:
         st.session_state.claude_history = []
 
@@ -436,6 +444,7 @@ with tab_shell:
     if not st.session_state.claude_history:
         with st.spinner("Starting Claude…"):
             greeting = _run_claude(
+                storage, mirror,
                 "Introduce yourself briefly and list the available session folders and their files."
             )
         st.session_state.claude_history.append(("assistant", greeting))
@@ -468,19 +477,19 @@ with tab_shell:
                 input_ctx = ""
                 if in_idx >= 0:
                     in_s, in_v = _ALL_SV[in_idx]
-                    input_path = _version_path(in_s, in_v) / in_file
-                    if input_path.exists():
-                        input_ctx = f"Context from {in_s}/{in_v}/{in_file}:\n```\n{input_path.read_text(encoding='utf-8')}\n```\n\n"
+                    input_content = storage.load(in_s, in_v, in_file)
+                    if input_content:
+                        input_ctx = f"Context from {in_s}/{in_v}/{in_file}:\n```\n{input_content}\n```\n\n"
                 full_prompt = f"{history_ctx}\nUser: {input_ctx}{user_input}" if history_ctx else f"{input_ctx}{user_input}"
                 # Resolve output target
-                out_target = None
+                out_target: tuple[str, str, str] | None = None
                 if out_choice != _NEW_VERSION:
                     out_sv_idx = _SV_LABELS.index(out_choice)
                     out_s, out_v = _ALL_SV[out_sv_idx]
-                    out_target = _version_path(out_s, out_v) / out_file
+                    out_target = (out_s, out_v, out_file)
                 elif out_new_session.strip() and out_new_version.strip():
-                    out_target = _DATA / out_new_session.strip() / out_new_version.strip() / out_file
-                reply = _run_claude(full_prompt, output_path=out_target)
+                    out_target = (out_new_session.strip(), out_new_version.strip(), out_file)
+                reply = _run_claude(storage, mirror, full_prompt, output_target=out_target)
             st.markdown(reply)
         st.session_state.claude_history.append(("assistant", reply))
 
