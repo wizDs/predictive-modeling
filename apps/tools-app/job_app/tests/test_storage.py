@@ -8,12 +8,12 @@ from job_app.storage import SessionStorage, object_key
 
 
 @dataclass
-class _FakeObject:
+class _MockObject:
     object_name: str | None
     is_dir: bool
 
 
-class _FakeResponse:
+class _MockResponse:
     def __init__(self, data: bytes) -> None:
         self._data = data
 
@@ -27,8 +27,8 @@ class _FakeResponse:
         pass
 
 
-class _FakeMinio:
-    """In-memory stand-in implementing job_app.storage.MinioClient, for tests."""
+class _MockMinio:
+    """In-memory mock implementing job_app.storage.MinioClient, for tests."""
 
     def __init__(self) -> None:
         self._objects: dict[str, bytes] = {}
@@ -42,11 +42,11 @@ class _FakeMinio:
 
     def list_objects(
         self, bucket_name: str, prefix: str | None = None, recursive: bool = False
-    ) -> list[_FakeObject]:
+    ) -> list[_MockObject]:
         prefix = prefix or ""
         keys = sorted(k for k in self._objects if k.startswith(prefix))
         if recursive:
-            return [_FakeObject(k, False) for k in keys]
+            return [_MockObject(k, False) for k in keys]
         seen_dirs: set[str] = set()
         results = []
         for k in keys:
@@ -55,15 +55,15 @@ class _FakeMinio:
                 full_dir = prefix + rest.split("/", 1)[0] + "/"
                 if full_dir not in seen_dirs:
                     seen_dirs.add(full_dir)
-                    results.append(_FakeObject(full_dir, True))
+                    results.append(_MockObject(full_dir, True))
             else:
-                results.append(_FakeObject(k, False))
+                results.append(_MockObject(k, False))
         return results
 
-    def get_object(self, bucket_name: str, object_name: str) -> _FakeResponse:
+    def get_object(self, bucket_name: str, object_name: str) -> _MockResponse:
         if object_name not in self._objects:
             raise S3Error(None, "NoSuchKey", "not found", object_name, "", "", bucket_name, object_name)  # type: ignore[arg-type]
-        return _FakeResponse(self._objects[object_name])
+        return _MockResponse(self._objects[object_name])
 
     def put_object(
         self, bucket_name: str, object_name: str, data: BinaryIO, length: int, content_type: str = ""
@@ -72,7 +72,7 @@ class _FakeMinio:
 
 
 def _storage() -> SessionStorage:
-    return SessionStorage(_FakeMinio(), "job-app")
+    return SessionStorage(_MockMinio(), "job-app")
 
 
 def test_object_key() -> None:
