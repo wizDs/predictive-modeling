@@ -1,3 +1,4 @@
+import atexit
 import difflib
 import re
 import shutil
@@ -81,7 +82,9 @@ def _mirror_dir() -> Path:
     into this directory before each call and any write Claude makes is uploaded back after.
     """
     if "_mirror_dir" not in st.session_state:
-        st.session_state["_mirror_dir"] = tempfile.mkdtemp(prefix="job_app_mirror_")
+        mirror = tempfile.mkdtemp(prefix="job_app_mirror_")
+        atexit.register(shutil.rmtree, mirror, ignore_errors=True)
+        st.session_state["_mirror_dir"] = mirror
     return Path(st.session_state["_mirror_dir"])
 
 
