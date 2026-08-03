@@ -88,26 +88,10 @@ def _mirror_dir() -> Path:
     return Path(st.session_state["_mirror_dir"])
 
 
-def _sync_mirror(storage: SessionStorage, mirror: Path) -> None:
-    """Overwrite the mirror with the current contents of storage, including cleared files.
-
-    Always writes (even empty strings) rather than skipping empty content -- otherwise a
-    file that was cleared and re-saved in storage would leave its stale, non-empty version
-    behind in a mirror synced from an earlier call within the same browser session.
-    """
-    for session in storage.list_sessions():
-        for version in storage.list_versions(session):
-            for filename in FILENAMES:
-                content = storage.load(session, version, filename)
-                target = mirror / session / version / filename
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_text(content, encoding="utf-8")
-
-
 def _run_claude(
     storage: SessionStorage, mirror: Path, prompt: str, output_target: tuple[str, str, str] | None = None
 ) -> str:
-    _sync_mirror(storage, mirror)
+    storage.materialize(mirror)
     output_path = mirror.joinpath(*output_target) if output_target else None
     write_instruction = (
         f"When writing files, ONLY write to {output_path}. "
@@ -173,6 +157,7 @@ st.title("Job Application")
 try:
     storage = _get_storage()
     sessions = storage.list_sessions()
+    _session_versions = {s: storage.list_versions(s) for s in sessions}
 except Exception as exc:
     st.error(
         f"Could not reach MinIO storage: {exc}\n\n"
@@ -189,7 +174,7 @@ with col_sess:
     )
 with col_ver:
     if selected_session != _NEW_SESSION:
-        versions = storage.list_versions(selected_session)
+        versions = _session_versions[selected_session]
         selected_version = st.selectbox(
             "Version",
             options=[_NEW_VERSION] + versions,
@@ -223,7 +208,7 @@ if st.session_state.get("_last_load_key") != _load_key:
         for key in ("cv_text", "application_text", "job_text", "saved_cv", "saved_application", "saved_job"):
             st.session_state[key] = ""
     # Sync shell defaults to match top-level selection
-    _all_sv_now = [(s, v) for s in sessions for v in storage.list_versions(s)]
+    _all_sv_now = [(s, v) for s in sessions for v in _session_versions[s]]
     if selected_session != _NEW_SESSION and selected_version != _NEW_VERSION:
         try:
             st.session_state["in_sv"] = _all_sv_now.index((selected_session, selected_version))
@@ -240,7 +225,7 @@ st.divider()
 tab_editor, tab_viewer, tab_shell = st.tabs(["✏️ Editor", "🔍 Viewer", "🖥️ Shell"])
 
 # Helper: build a flat list of (session, version) pairs for pickers
-_ALL_SV = [(s, v) for s in sessions for v in storage.list_versions(s)]
+_ALL_SV = [(s, v) for s in sessions for v in _session_versions[s]]
 _SV_LABELS = [_session_version_label(s, v) for s, v in _ALL_SV]
 
 with tab_editor:
@@ -296,9 +281,8 @@ with tab_editor:
         anonymized_cv = _anonymize_cv(cv)
         anonymized_application = _anonymize_application(application)
         anonymized_job = _anonymize_application(job_posting)
-        storage.save(s_name, v_name, "cv.tex", anonymized_cv)
-        storage.save(s_name, v_name, "application.tex", anonymized_application)
-        storage.save(s_name, v_name, "job_posting.tex", anonymized_job)
+        for filename, content in zip(FILENAMES, (anonymized_cv, anonymized_application, anonymized_job)):
+            storage.save(s_name, v_name, filename, content)
         st.session_state["saved_cv"] = anonymized_cv
         st.session_state["saved_application"] = anonymized_application
         st.session_state["saved_job"] = anonymized_job

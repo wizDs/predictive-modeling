@@ -8,6 +8,7 @@ old local-disk layout at ``job_app/data/<session>/<version>/``.
 import io
 import os
 from collections.abc import Iterable
+from pathlib import Path
 from typing import BinaryIO, Protocol
 
 from minio import Minio
@@ -45,11 +46,6 @@ def object_key(session: str, version: str, filename: str) -> str:
     return f"{session}/{version}/{filename}"
 
 
-def _dir_names(object_names: Iterable[str], prefix_len: int) -> list[str]:
-    """Strip a known prefix length and trailing '/' off S3 common-prefix object names."""
-    return sorted({name[prefix_len:].rstrip("/") for name in object_names})
-
-
 class SessionStorage:
     """Session/version file storage backed by an S3-compatible (MinIO) bucket."""
 
@@ -61,12 +57,12 @@ class SessionStorage:
 
     def list_sessions(self) -> list[str]:
         objects = self._client.list_objects(self._bucket, recursive=False)
-        return _dir_names((o.object_name for o in objects if o.is_dir and o.object_name), 0)
+        return sorted({o.object_name.rstrip("/") for o in objects if o.is_dir and o.object_name})
 
     def list_versions(self, session: str) -> list[str]:
         prefix = f"{session}/"
         objects = self._client.list_objects(self._bucket, prefix=prefix, recursive=False)
-        return _dir_names((o.object_name for o in objects if o.is_dir and o.object_name), len(prefix))
+        return sorted({o.object_name[len(prefix):].rstrip("/") for o in objects if o.is_dir and o.object_name})
 
     def load(self, session: str, version: str, filename: str) -> str:
         key = object_key(session, version, filename)
@@ -88,6 +84,19 @@ class SessionStorage:
         self._client.put_object(
             self._bucket, key, io.BytesIO(data), length=len(data), content_type="text/plain; charset=utf-8"
         )
+
+    def materialize(self, local_dir: Path) -> None:
+        """Write every session/version file in this bucket under local_dir, mirroring the S3 key layout.
+
+        Always writes (even empty strings) so a file that was cleared and re-saved doesn't leave
+        a stale, non-empty version behind from an earlier call against the same local_dir.
+        """
+        for session in self.list_sessions():
+            for version in self.list_versions(session):
+                for filename in FILENAMES:
+                    target = local_dir / session / version / filename
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_text(self.load(session, version, filename), encoding="utf-8")
 
 
 def client_from_env() -> Minio:
