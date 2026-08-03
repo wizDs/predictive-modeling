@@ -86,14 +86,19 @@ def _mirror_dir() -> Path:
 
 
 def _sync_mirror(storage: SessionStorage, mirror: Path) -> None:
+    """Overwrite the mirror with the current contents of storage, including cleared files.
+
+    Always writes (even empty strings) rather than skipping empty content -- otherwise a
+    file that was cleared and re-saved in storage would leave its stale, non-empty version
+    behind in a mirror synced from an earlier call within the same browser session.
+    """
     for session in storage.list_sessions():
         for version in storage.list_versions(session):
             for filename in FILENAMES:
                 content = storage.load(session, version, filename)
-                if content:
-                    target = mirror / session / version / filename
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    target.write_text(content, encoding="utf-8")
+                target = mirror / session / version / filename
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(content, encoding="utf-8")
 
 
 def _run_claude(
