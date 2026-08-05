@@ -17,6 +17,16 @@ class ModelType(enum.StrEnum):
     TURBO = "turbo"
 
 
+_FFMPEG_MISSING_MESSAGE = (
+    "**ffmpeg not found.** Whisper shells out to the `ffmpeg` CLI to decode audio, "
+    "and it isn't installed (or isn't on PATH).\n\n"
+    "Install it, then restart the app:\n"
+    "- **Windows:** `choco install ffmpeg` (or `winget install ffmpeg`)\n"
+    "- **macOS:** `brew install ffmpeg`\n"
+    "- **Linux:** `apt install ffmpeg` (or your distro's package manager)"
+)
+
+
 @st.cache_resource
 def load_model(model_type: ModelType) -> whisper.Whisper:
     """Load and cache the Whisper model."""
@@ -133,6 +143,11 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# Surface the ffmpeg dependency immediately on page load, rather than only once the user
+# has recorded/uploaded audio and clicked Transcribe.
+if shutil.which("ffmpeg") is None:
+    st.error(_FFMPEG_MISSING_MESSAGE)
+
 # Sidebar for model selection
 with st.sidebar:
     st.markdown("### ⚙️ Settings")
@@ -221,14 +236,7 @@ if audio_data is not None:
     # Transcribe button
     if st.button("✨ Transcribe", use_container_width=True):
         if shutil.which("ffmpeg") is None:
-            st.error(
-                "**ffmpeg not found.** Whisper shells out to the `ffmpeg` CLI to decode audio, "
-                "and it isn't installed (or isn't on PATH).\n\n"
-                "Install it, then restart the app:\n"
-                "- **Windows:** `choco install ffmpeg` (or `winget install ffmpeg`)\n"
-                "- **macOS:** `brew install ffmpeg`\n"
-                "- **Linux:** `apt install ffmpeg` (or your distro's package manager)"
-            )
+            st.error(_FFMPEG_MISSING_MESSAGE)
         else:
             with st.spinner("Transcribing..."):
                 # Determine file extension
