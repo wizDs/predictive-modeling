@@ -1,5 +1,6 @@
 from datetime import datetime
 import enum
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -143,6 +144,7 @@ with st.sidebar:
         index=0,  # Default to tiny for speed
         help="Larger models are more accurate but slower",
     )
+    assert model_choice is not None  # index=0 always selects a default
 
     st.markdown(
         """
@@ -218,55 +220,65 @@ if audio_data is not None:
 
     # Transcribe button
     if st.button("✨ Transcribe", use_container_width=True):
-        with st.spinner("Transcribing..."):
-            # Determine file extension
-            if hasattr(audio_data, "name"):
-                suffix = Path(audio_data.name).suffix or ".wav"
-            else:
-                suffix = ".wav"
+        if shutil.which("ffmpeg") is None:
+            st.error(
+                "**ffmpeg not found.** Whisper shells out to the `ffmpeg` CLI to decode audio, "
+                "and it isn't installed (or isn't on PATH).\n\n"
+                "Install it, then restart the app:\n"
+                "- **Windows:** `choco install ffmpeg` (or `winget install ffmpeg`)\n"
+                "- **macOS:** `brew install ffmpeg`\n"
+                "- **Linux:** `apt install ffmpeg` (or your distro's package manager)"
+            )
+        else:
+            with st.spinner("Transcribing..."):
+                # Determine file extension
+                if hasattr(audio_data, "name"):
+                    suffix = Path(audio_data.name).suffix or ".wav"
+                else:
+                    suffix = ".wav"
 
-            # Save audio to temp file
-            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp_file:
-                tmp_file.write(audio_data.getvalue())
-                tmp_path = tmp_file.name
+                # Save audio to temp file
+                with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp_file:
+                    tmp_file.write(audio_data.getvalue())
+                    tmp_path = tmp_file.name
 
-            try:
-                # Set language if specified
-                transcribe_options = {}
-                if language != "Auto-detect":
-                    lang_map = {
-                        "English": "en",
-                        "Danish": "da",
-                        "German": "de",
-                        "Spanish": "es",
-                        "French": "fr",
-                        "Japanese": "ja",
-                        "Chinese": "zh",
-                    }
-                    transcribe_options["language"] = lang_map.get(language)
+                try:
+                    # Set language if specified
+                    transcribe_options = {}
+                    if language != "Auto-detect":
+                        lang_map = {
+                            "English": "en",
+                            "Danish": "da",
+                            "German": "de",
+                            "Spanish": "es",
+                            "French": "fr",
+                            "Japanese": "ja",
+                            "Chinese": "zh",
+                        }
+                        transcribe_options["language"] = lang_map.get(language)
 
-                # Transcribe
-                result = model.transcribe(tmp_path, **transcribe_options)
+                    # Transcribe
+                    result = model.transcribe(tmp_path, **transcribe_options)
 
-                # Display results
-                st.markdown("### 📝 Transcription")
+                    # Display results
+                    st.markdown("### 📝 Transcription")
 
-                # Detected language
-                if "language" in result:
-                    st.markdown(f"**Detected Language:** {result['language']}")
+                    # Detected language
+                    if "language" in result:
+                        st.markdown(f"**Detected Language:** {result['language']}")
 
-                # Transcription text
-                st.markdown(
-                    f'<div class="transcription-box">{result["text"]}</div>',
-                    unsafe_allow_html=True,
-                )
+                    # Transcription text
+                    st.markdown(
+                        f'<div class="transcription-box">{result["text"]}</div>',
+                        unsafe_allow_html=True,
+                    )
 
-                # Copy button
-                st.code(result["text"], language=None)
+                    # Copy button
+                    st.code(result["text"], language=None)
 
-            finally:
-                # Cleanup temp file
-                Path(tmp_path).unlink(missing_ok=True)
+                finally:
+                    # Cleanup temp file
+                    Path(tmp_path).unlink(missing_ok=True)
 
 else:
     st.markdown(
