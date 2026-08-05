@@ -3,17 +3,10 @@ import difflib
 import re
 import shutil
 import subprocess
-import sys
 import tempfile
 from collections import Counter
 from pathlib import Path
 import streamlit as st
-
-# Streamlit execs page scripts directly, so sys.path isn't guaranteed to contain
-# apps/tools-app (the parent of this package) regardless of which entrypoint launched it.
-_APP_ROOT = Path(__file__).resolve().parent.parent
-if str(_APP_ROOT) not in sys.path:
-    sys.path.insert(0, str(_APP_ROOT))
 
 from wiz.job_app_backend import MODEL_DIR, predict, highlight_html, LABEL_COLOURS, load_model, skill_llm
 from job_app.storage import FILENAMES, SessionStorage, bucket_from_env, client_from_env

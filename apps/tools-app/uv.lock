@@ -2649,7 +2649,7 @@ wheels = [
 [[package]]
 name = "tools-app"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "holidays" },
     { name = "job-app-backend" },
