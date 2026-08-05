@@ -1,10 +1,13 @@
 import datetime
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
 import polars as pl
 import streamlit as st
+
+sys.path.insert(0, str(Path(__file__).parent))
 
 from load_data import (
     Column,
