@@ -3,7 +3,10 @@ services:
     image: minio/minio:latest
     container_name: job-app-minio
     restart: unless-stopped
-    # Bound to localhost only -- this is single-user local storage, not a shared service.
+    # Bound to localhost only -- this is single-user local storage, not a shared network service.
+    # The container itself *is* shared, though: both the Job Application page (bucket
+    # "job-app") and the Transcribe page (bucket "transcribe", ../transcribe/storage.py) talk
+    # to this one instance instead of each running their own. See .env.example.
     ports:
       - "127.0.0.1:9000:9000" # S3 API
       - "127.0.0.1:9001:9001" # Web console

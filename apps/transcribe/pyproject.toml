@@ -5,7 +5,9 @@ description = "Audio recording and transcription with Whisper"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "minio>=7.2.20",
     "openai-whisper>=20250625",
+    "python-dotenv>=1.2.1",
     "streamlit>=1.40.0",
     "watchdog>=6.0.0",
 ]
@@ -13,6 +15,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "mypy>=1.15",
+    "pytest>=9.1.1",
     "ruff>=0.9",
 ]
 
