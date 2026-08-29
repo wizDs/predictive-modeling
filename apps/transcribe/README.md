@@ -9,6 +9,7 @@ A simple Streamlit app for recording and transcribing audio using OpenAI's Whisp
 - ✨ Transcribe using various Whisper model sizes
 - 🌍 Support for multiple languages with auto-detection
 - 📋 Easy copy of transcribed text
+- 📚 Optional history -- save recordings + transcripts to MinIO and browse them later
 
 ## Setup
 
@@ -27,6 +28,17 @@ brew install ffmpeg
 # Ubuntu/Debian
 sudo apt install ffmpeg
 ```
+
+3. (Optional) Enable history -- saved recordings and transcripts, browsable in the History tab.
+   This reuses the same MinIO container the Job Application page runs (no second container),
+   under its own bucket:
+
+```bash
+cp .env.example .env   # fill in MINIO_ROOT_USER / MINIO_ROOT_PASSWORD to match ../tools-app/.env
+cd ../tools-app && docker compose up -d && cd -
+```
+
+   Without this, the app still works -- history is just disabled.
 
 ## Usage
 
