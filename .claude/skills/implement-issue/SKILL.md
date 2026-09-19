@@ -28,6 +28,20 @@ Read the issue's Problem/Evidence/Proposed-fix sections (or equivalent) as the s
 implementation work yourself — don't delegate understanding of the issue to a subagent.
 Commit as you go with real messages; don't wait until the end for one giant commit.
 
+**Scope the blast radius from the knowledge graph first** (best-effort — skip silently if
+`graphify-out/graph.json` doesn't exist, or if the repo is small enough to just hold in
+context). Instead of grepping blind for what the change touches:
+
+- `graphify query "<the thing the issue changes>"` — returns the affected nodes and their
+  `source_location`s, so you read only the files that actually matter.
+- `graphify path "A" "B"` — traces the dependency path between two concepts (e.g. does this
+  CI change reach the Pants resolve?).
+
+Lean on the graph's *cross-community* and *surprising* edges — they catch couplings grep
+misses, so you implement every spot the first time instead of discovering a missed file in
+review. This is the same navigation the issue-author should use when scoping a change up
+front; here it keeps the implementation complete.
+
 ## 2. Validate — local first, push last
 
 Run this repo's own CI checks locally before ever pushing, so iteration is fast:
@@ -86,4 +100,10 @@ back to step 2 (re-validate locally, re-push, confirm CI still green) before mov
 - If a draft PR was already opened in step 2, fill in a real title/body and `gh pr ready` it.
 - Otherwise, `gh pr create` now with a title/body summarizing the issue and the fix, and a
   `Closes #<n>` line so merging auto-closes the issue.
+- **Refresh the knowledge graph** so it reflects the change you just shipped (best-effort —
+  skip if graphify isn't installed): `/graphify . --update` re-extracts only the changed
+  files. The versioned graph artifacts live in `graphify-out/` (`graph.json`, `graph.html`,
+  `GRAPH_REPORT.md`, `manifest.json`; the `cache/` and machine-local sidecars are gitignored).
+  If any of those tracked artifacts changed, commit them (`git commit -m "chore: refresh
+  graphify graph"`) and push to the PR branch so the map stays in sync with the code.
 - Report the PR URL back to the user. Don't merge it — that's the user's call.

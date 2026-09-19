@@ -1,0 +1,13 @@
+# graphify output: commit only the shareable graph artifacts.
+# Everything else here is regenerable cache or machine-local state:
+#   cache/            - extraction cache (1.4MB, rebuilt on demand)
+#   .graphify_python  - absolute path to this machine's interpreter
+#   .graphify_root    - absolute scan-root path for this machine
+#   .graphify_labels.json, cost.json - local run state
+# Whitelist approach: ignore all, then un-ignore the four artifacts we version.
+*
+!.gitignore
+!graph.json
+!graph.html
+!GRAPH_REPORT.md
+!manifest.json
