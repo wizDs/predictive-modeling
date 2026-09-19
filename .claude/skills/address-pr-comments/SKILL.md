@@ -85,6 +85,13 @@ re-check, then:
 git push
 ```
 
+If any code changed in this run, **refresh the knowledge graph** afterward (best-effort — skip
+if graphify isn't installed or there was no code change, e.g. an answer-only pass):
+`/graphify . --update` re-extracts only the changed files. The versioned artifacts live in
+`graphify-out/` (`graph.json`, `graph.html`, `GRAPH_REPORT.md`, `manifest.json`; `cache/` and
+machine-local sidecars are gitignored). If those tracked artifacts changed, commit and push
+them to the PR branch so the map stays in sync with the code.
+
 Comment replies from steps 3a/3b/3c can go out as you go rather than being batched to the end
 — there's no ordering requirement between "reply on GitHub" and "push the branch."
 
