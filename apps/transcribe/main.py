@@ -1,11 +1,19 @@
 from datetime import datetime
 import enum
 import shutil
+import sys
 import tempfile
 from pathlib import Path
 
 import streamlit as st
 import whisper
+from dotenv import load_dotenv
+
+sys.path.insert(0, str(Path(__file__).parent))
+
+from storage import RecordingStorage, bucket_from_env, client_from_env, new_recording_id
+
+load_dotenv()
 
 
 class ModelType(enum.StrEnum):
@@ -31,6 +39,29 @@ _FFMPEG_MISSING_MESSAGE = (
 def load_model(model_type: ModelType) -> whisper.Whisper:
     """Load and cache the Whisper model."""
     return whisper.load_model(model_type)
+
+
+_AUDIO_MIME = {
+    ".wav": "audio/wav",
+    ".mp3": "audio/mp3",
+    ".m4a": "audio/mp4",
+    ".ogg": "audio/ogg",
+    ".flac": "audio/flac",
+    ".webm": "audio/webm",
+}
+
+
+@st.cache_resource
+def get_storage() -> RecordingStorage | None:
+    """Connect to the shared MinIO container job_app also uses (see .env.example).
+
+    History is a nice-to-have here, not core to transcription, so a missing/unreachable
+    MinIO is not fatal -- unlike job_app, which hard-requires it.
+    """
+    try:
+        return RecordingStorage(client_from_env(), bucket_from_env())
+    except Exception:
+        return None
 
 
 # Page config
@@ -188,12 +219,26 @@ with st.sidebar:
         index=0,
     )
 
+    st.markdown("### 💾 History")
+    storage = get_storage()
+    save_to_history = st.checkbox(
+        "Save recordings to history",
+        value=storage is not None,
+        disabled=storage is None,
+        help="Stores the audio and transcript in MinIO (see .env.example) so you can revisit them later.",
+    )
+    if storage is None:
+        st.caption(
+            "MinIO not reachable -- history is disabled. Start it with `docker compose up -d` "
+            "from `apps/tools-app/` (see `.env.example`), then reload."
+        )
+
 # Load model
 with st.spinner(f"Loading {model_choice.value} model..."):
     model = load_model(model_choice)
 
-# Main content - tabs for record vs upload
-tab_record, tab_upload = st.tabs(["🎤 Record", "📁 Upload File"])
+# Main content - tabs for record vs upload vs history
+tab_record, tab_upload, tab_history = st.tabs(["🎤 Record", "📁 Upload File", "📚 History"])
 
 audio_data = None
 audio_name: str
@@ -216,6 +261,42 @@ with tab_upload:
     if uploaded_file:
         audio_data = uploaded_file
         audio_name = Path(uploaded_file.name).stem
+
+with tab_history:
+    if storage is None:
+        st.info("MinIO not reachable -- see the History note in the sidebar.")
+    else:
+        recordings = storage.list_recordings()
+        if not recordings:
+            st.markdown(
+                '<div class="info-card"><p>No saved recordings yet. Transcribe something '
+                "with history enabled to see it here.</p></div>",
+                unsafe_allow_html=True,
+            )
+        else:
+            selected_recording = st.selectbox("Recording", recordings, key="history_recording")
+            hist_audio = storage.load_audio(selected_recording)
+            hist_transcript = storage.load_transcript(selected_recording)
+            hist_meta = storage.load_meta(selected_recording)
+
+            st.markdown(f"**Language:** {hist_meta.get('language', 'unknown')}  |  "
+                        f"**Model:** {hist_meta.get('model', 'unknown')}")
+
+            if hist_audio is not None:
+                audio_filename = storage.audio_filename(selected_recording) or ""
+                mime = _AUDIO_MIME.get(Path(audio_filename).suffix, "audio/wav")
+                st.audio(hist_audio, format=mime)
+                st.download_button(
+                    "⬇️ Download Recording",
+                    data=hist_audio,
+                    file_name=Path(audio_filename).name or f"{selected_recording}.wav",
+                    mime=mime,
+                    key="history_download_audio",
+                )
+
+            st.markdown("### 📝 Transcription")
+            st.markdown(f'<div class="transcription-box">{hist_transcript}</div>', unsafe_allow_html=True)
+            st.code(hist_transcript, language=None)
 
 # Process audio (from either source)
 if audio_data is not None:
@@ -283,6 +364,19 @@ if audio_data is not None:
 
                     # Copy button
                     st.code(result["text"], language=None)
+
+                    # Persist to the shared MinIO container, if enabled and reachable
+                    if save_to_history and storage is not None:
+                        recording_id = new_recording_id()
+                        storage.save(
+                            recording_id,
+                            audio_data.getvalue(),
+                            suffix,
+                            result["text"],
+                            result.get("language", "unknown"),
+                            model_choice.value,
+                        )
+                        st.caption(f"💾 Saved to history as `{recording_id}`")
 
                 finally:
                     # Cleanup temp file
