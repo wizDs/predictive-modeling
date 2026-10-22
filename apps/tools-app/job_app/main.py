@@ -1,4 +1,5 @@
 import atexit
+import base64
 import difflib
 import re
 import shutil
@@ -9,6 +10,7 @@ from pathlib import Path
 import streamlit as st
 
 from wiz.job_app_backend import MODEL_DIR, predict, highlight_html, LABEL_COLOURS, load_model, skill_llm
+from job_app import latex
 from job_app.storage import FILENAMES, SessionStorage, bucket_from_env, client_from_env
 
 _BACKEND_SPACY = "spaCy NER"
@@ -143,6 +145,33 @@ def _session_version_label(session: str, version: str) -> str:
     return f"{session} / {version}"
 
 
+def _pdf_preview_and_download(content: str, label: str, cache_key: str) -> None:
+    """Render a Compile-to-PDF button for `content`, plus an inline preview + download once compiled."""
+    state_key = f"pdf_{cache_key}"
+    if not latex.docker_available():
+        st.caption(f"🔒 {latex.DOCKER_MISSING_MESSAGE}")
+        return
+    if st.button(f"🖨️ Compile {label} to PDF", key=f"compile_{cache_key}"):
+        with st.spinner(f"Compiling {label}…"):
+            try:
+                st.session_state[state_key] = latex.compile_to_pdf(content, filename=f"{cache_key}.tex")
+            except latex.LatexCompileError as exc:
+                st.session_state.pop(state_key, None)
+                st.error(f"LaTeX compilation failed:\n\n```\n{exc}\n```")
+    pdf_bytes = st.session_state.get(state_key)
+    if pdf_bytes:
+        st.download_button(
+            f"⬇️ Download {label} PDF", data=pdf_bytes, file_name=f"{cache_key}.pdf",
+            mime="application/pdf", key=f"download_{cache_key}",
+        )
+        b64 = base64.b64encode(pdf_bytes).decode()
+        st.markdown(
+            f'<iframe src="data:application/pdf;base64,{b64}" width="100%" height="800" '
+            'style="border:1px solid #444;border-radius:6px;"></iframe>',
+            unsafe_allow_html=True,
+        )
+
+
 # --- Page ---
 
 st.title("Job Application")
@@ -190,6 +219,8 @@ with col_name:
 _load_key = (selected_session, selected_version)
 if st.session_state.get("_last_load_key") != _load_key:
     st.session_state["_last_load_key"] = _load_key
+    st.session_state.pop("pdf_cv", None)
+    st.session_state.pop("pdf_application", None)
     if selected_session != _NEW_SESSION and selected_version != _NEW_VERSION:
         st.session_state["cv_text"] = storage.load(selected_session, selected_version, "cv.tex")
         st.session_state["application_text"] = storage.load(selected_session, selected_version, "application.tex")
@@ -279,6 +310,8 @@ with tab_editor:
         st.session_state["saved_cv"] = anonymized_cv
         st.session_state["saved_application"] = anonymized_application
         st.session_state["saved_job"] = anonymized_job
+        st.session_state.pop("pdf_cv", None)
+        st.session_state.pop("pdf_application", None)
         cv_fields = len(re.findall(r"\\def\\[a-zA-Z]+\{REDACTED\}", anonymized_cv))
         app_fields = len(re.findall(r"REDACTED", anonymized_application))
         st.success(f"Saved to {s_name}/{v_name}/ — {cv_fields} CV field(s) and {app_fields} contact detail(s) anonymised")
@@ -302,7 +335,11 @@ with tab_viewer:
         else:
             sub_cv, sub_job, sub_app = st.tabs(["CV", "Job Posting", "Application Letter"])
             with sub_cv:
-                st.code(saved_cv, language="latex", line_numbers=True) if saved_cv else st.caption("No CV saved.")
+                if saved_cv:
+                    st.code(saved_cv, language="latex", line_numbers=True)
+                    _pdf_preview_and_download(saved_cv, "CV", "cv")
+                else:
+                    st.caption("No CV saved.")
             with sub_job:
                 if saved_job:
                     _backends = []
@@ -350,7 +387,11 @@ with tab_viewer:
                 else:
                     st.caption("No job posting saved.")
             with sub_app:
-                st.code(saved_application, language="latex", line_numbers=True) if saved_application else st.caption("No application letter saved.")
+                if saved_application:
+                    st.code(saved_application, language="latex", line_numbers=True)
+                    _pdf_preview_and_download(saved_application, "Application Letter", "application")
+                else:
+                    st.caption("No application letter saved.")
     else:
         cmp_cols = st.columns(2)
         # Default A to current session/version if loaded
