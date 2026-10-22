@@ -172,3 +172,6 @@ data
 
 # Pants
 .pants.d/
+
+# graphify (local knowledge-graph build output, see CLAUDE.md)
+graphify-out/
