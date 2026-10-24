@@ -2,7 +2,6 @@ from collections.abc import Iterator
 import os
 import datetime
 import pathlib
-import tempfile
 import dateutil
 import pydantic
 import polars as pl
@@ -10,19 +9,26 @@ import streamlit as st
 from wiz.budget import data_loader, payment, schemas
 from dotenv import load_dotenv
 
-# Use a consistent temp file path
-STATE_FILE = pathlib.Path(tempfile.gettempdir()) / "budget_app_state.json"
+DEFAULT_STATE_FILE = pathlib.Path.home() / ".local" / "state" / "budget-app" / "state.json"
+
+
+def state_file() -> pathlib.Path:
+    """Persistent state path (survives reboots); override with BUDGET_STATE_FILE."""
+    return pathlib.Path(os.environ.get("BUDGET_STATE_FILE", DEFAULT_STATE_FILE))
 
 
 def save_state(interface: schemas.PaymentInterface) -> None:
-    """Save the payment interface state to a temp file."""
-    STATE_FILE.write_text(interface.model_dump_json(indent=2))
+    """Save the payment interface state to the persistent state file."""
+    path = state_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(interface.model_dump_json(indent=2))
 
 
 def load_state() -> schemas.PaymentInterface | None:
-    """Load the payment interface state from a temp file."""
-    if STATE_FILE.exists():
-        return schemas.PaymentInterface.model_validate_json(STATE_FILE.read_text())
+    """Load the payment interface state from the persistent state file."""
+    path = state_file()
+    if path.exists():
+        return schemas.PaymentInterface.model_validate_json(path.read_text())
     return None
 
 
