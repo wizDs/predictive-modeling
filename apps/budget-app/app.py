@@ -178,25 +178,36 @@ def collect_payment_interface_inputs(
         planned_projects=planned_projects, num_projects=num_projects
     )
 
-    # Submit Button
-    if st.button("Submit", key="submit_button"):
-        try:
-            # Validate using Pydantic
-            payment_interface = schemas.PaymentInterface(
-                saldo=saldo,
-                monthly_salary=monthly_salary,
-                additional_cost=additional_cost,
-                planned_projects=planned_projects or [],
-                periods=periods,
-                rundate=rundate,
-            )
-            st.success("✅ Payment Data Successfully loaded!")
-            return payment_interface
+    submit_col, save_col, _ = st.columns([1, 1, 4])
+    submit = submit_col.button("Submit", key="submit_button")
+    save = save_col.button(
+        "💾 Save", key="save_button", help="Overwrite the saved session with these inputs"
+    )
+    if not (submit or save):
+        return None
 
-        except pydantic.ValidationError as e:
-            st.error("❌ Validation Error!")
-            st.text(e)
-            return None
+    try:
+        # Validate using Pydantic
+        payment_interface = schemas.PaymentInterface(
+            saldo=saldo,
+            monthly_salary=monthly_salary,
+            additional_cost=additional_cost,
+            planned_projects=planned_projects or [],
+            periods=periods,
+            rundate=rundate,
+        )
+    except pydantic.ValidationError as e:
+        st.error("❌ Validation Error!")
+        st.text(e)
+        return None
+
+    if save:
+        save_state(payment_interface)
+        st.success(f"💾 Saved to {state_file()}")
+    if submit:
+        st.success("✅ Payment Data Successfully loaded!")
+        return payment_interface
+    return None
 
 
 def main() -> None:
@@ -204,7 +215,6 @@ def main() -> None:
     interface = collect_payment_interface_inputs(previous_state=prev_state)
     if interface:
         calculate(interface)
-        save_state(interface)
 
 
 def calculate(payment_interface: schemas.PaymentInterface) -> None:
