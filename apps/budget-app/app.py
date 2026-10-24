@@ -87,32 +87,19 @@ def load_expected_income_to_polars(
 
 
 def _render_planned_projects(
-    planned_projects: list[schemas.Record], num_projects: int | None
+    planned_projects: list[schemas.Record], num_projects: int
 ) -> list[schemas.Record]:
-    assert num_projects is None or num_projects >= 0
+    """Render one input row per project, seeded from saved projects where available."""
+    assert num_projects >= 0
     col1, col2, col3 = st.columns([2, 1, 1])
 
-    if num_projects is not None and len(planned_projects) > 0:
-        raise ValueError("num_projects and planned_projects cannot both be provided")
-    if num_projects is None and not planned_projects:
-        return []
-
-    if planned_projects:
-        projects = planned_projects
-    else:
-        assert num_projects is not None
-        projects = [
-            schemas.Record(
-                amount=10_000.0,
-                date=datetime.date(
-                    year=datetime.date.today().year,
-                    month=datetime.date.today().month,
-                    day=1,
-                )
-                + dateutil.relativedelta.relativedelta(months=1),
-            )
-            for _ in range(num_projects)
-        ]
+    default_date = datetime.date.today().replace(
+        day=1
+    ) + dateutil.relativedelta.relativedelta(months=1)
+    projects = planned_projects[:num_projects] + [
+        schemas.Record(amount=10_000.0, date=default_date)
+        for _ in range(num_projects - len(planned_projects))
+    ]
 
     records = []
     for i, project in enumerate(projects):
@@ -187,10 +174,9 @@ def collect_payment_interface_inputs(
         )
 
     st.title("📊 Planned Projects")
-    if not planned_projects:
-        planned_projects = _render_planned_projects(
-            planned_projects=planned_projects, num_projects=num_projects
-        )
+    planned_projects = _render_planned_projects(
+        planned_projects=planned_projects, num_projects=num_projects
+    )
 
     # Submit Button
     if st.button("Submit", key="submit_button"):
